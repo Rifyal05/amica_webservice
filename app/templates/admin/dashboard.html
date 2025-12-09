@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amica Admin Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script> tailwind.config = { darkMode: 'class' } </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-[#0d1117] text-gray-800 dark:text-gray-200 h-screen flex overflow-hidden transition-colors duration-300" 
+      x-data="adminApp()" x-init="initApp()">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-white dark:bg-[#161b22] border-r border-gray-200 dark:border-white/5 flex flex-col justify-between shrink-0 z-20">
+        <div>
+            <div class="h-16 flex items-center px-6 border-b border-gray-100 dark:border-white/5">
+                <span class="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">Amica Studio</span>
+            </div>
+            <nav class="p-4 space-y-1">
+                <template x-for="item in navItems">
+                    <button @click="currentView = item.id" 
+                            :class="currentView === item.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5'"
+                            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+                        <span x-html="item.icon"></span>
+                        <span x-text="item.label"></span>
+                    </button>
+                </template>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-gray-100 dark:border-white/5 space-y-1">
+            <button @click="currentView = 'settings'" :class="currentView === 'settings' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50 dark:hover:bg-white/5 dark:text-gray-400'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                <span>Pengaturan</span>
+            </button>
+            <div class="flex items-center gap-3 px-3 py-3 mt-2 rounded-lg bg-gray-50 dark:bg-[#21262d] border border-gray-100 dark:border-gray-700">
+                <div class="w-8 h-8 rounded-full bg-blue-500 overflow-hidden shrink-0 border border-white/10 flex items-center justify-center text-white text-xs font-bold">
+                    <img x-show="user.avatar_url" :src="getAvatarUrl(user.avatar_url)" class="w-full h-full object-cover">
+                    <span x-show="!user.avatar_url" x-text="(user.display_name||'A').charAt(0)"></span>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-xs font-bold truncate" x-text="user.display_name"></p>
+                    <p class="text-[10px] text-gray-500 truncate" x-text="user.email"></p>
+                </div>
+            </div>
+            <button @click="logout()" class="w-full flex items-center gap-3 px-3 py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg text-sm font-medium transition-all mt-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                <span>Keluar</span>
+            </button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <div class="flex-1 overflow-y-auto p-8 no-scrollbar" @click="activeDropdown = null">
+            <div class="max-w-6xl mx-auto">
+                
+                <!-- DASHBOARD VIEW -->
+                <div x-show="currentView === 'dashboard'" x-transition.opacity>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <div>
+                            <h2 class="text-2xl font-bold">Ringkasan Aktivitas</h2>
+                            <p class="text-sm text-gray-500">Pantau metrik utama komunitas</p>
+                        </div>
+                        <div class="bg-white dark:bg-[#161b22] p-1 rounded-full border border-gray-200 dark:border-white/10 flex flex-wrap gap-1 shadow-sm">
+                            <template x-for="range in timeRanges">
+                                <button @click="setStatsRange(range.val)" 
+                                        :class="currentStatsRange === range.val ? 'bg-gray-900 dark:bg-blue-600 text-white shadow' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5'"
+                                        class="px-4 py-1.5 text-xs font-semibold rounded-full transition-all"
+                                        x-text="range.label"></button>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Total User</p>
+                                <h3 class="text-3xl font-bold mt-1 text-gray-800 dark:text-white" x-text="stats.total_users || 0">0</h3>
+                            </div>
+                            <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-600">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Laporan Pending</p>
+                                <h3 class="text-3xl font-bold mt-1 text-red-500" x-text="stats.pending_reports || 0">0</h3>
+                            </div>
+                            <div class="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-red-500">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">Total Feedback</p>
+                                <h3 class="text-3xl font-bold mt-1 text-emerald-500" x-text="stats.total_feedback || 0">0</h3>
+                            </div>
+                            <div class="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-emerald-500">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-8 bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-blue-500"></span> Pertumbuhan User
+                            </h3>
+                        </div>
+                        <div class="h-96 w-full">
+                            <canvas id="chartUsers"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm">
+                            <h3 class="text-xs font-bold mb-4 text-gray-400 uppercase tracking-wider">Aktivitas Postingan</h3>
+                            <div class="h-48 w-full">
+                                <canvas id="chartPosts"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm">
+                            <h3 class="text-xs font-bold mb-4 text-gray-400 uppercase tracking-wider">Tren Laporan</h3>
+                            <div class="h-48 w-full">
+                                <canvas id="chartReports"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm flex flex-col">
+                            <h3 class="text-xs font-bold mb-4 text-gray-400 uppercase tracking-wider">Sentimen Feedback</h3>
+                            <div class="flex-1 flex flex-row items-center justify-between gap-4">
+                                <div class="h-32 w-32 relative shrink-0">
+                                    <canvas id="chartSentiment"></canvas>
+                                    <div class="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                                        <span class="text-xl font-bold text-gray-800 dark:text-white" x-text="(stats.total_feedback || 0)"></span>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-3 w-full">
+                                    <div class="flex items-center justify-between p-2 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/20">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                            <span class="text-xs font-medium text-green-700 dark:text-green-400">Positif</span>
+                                        </div>
+                                        <span class="text-sm font-bold text-green-700 dark:text-green-400" x-text="(stats.sentiment_data ? stats.sentiment_data[0] : 0)"></span>
+                                    </div>
+                                    <div class="flex items-center justify-between p-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                                            <span class="text-xs font-medium text-red-700 dark:text-red-400">Negatif</span>
+                                        </div>
+                                        <span class="text-sm font-bold text-red-700 dark:text-red-400" x-text="(stats.sentiment_data ? stats.sentiment_data[1] : 0)"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- USERS VIEW -->
+                <div x-show="currentView === 'users'" x-transition.opacity x-cloak>
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                        <h2 class="text-2xl font-bold">Pengguna</h2>
+                        <div class="relative w-full md:w-64">
+                            <input type="text" x-model="searchQuery" placeholder="Cari..." class="w-full pl-10 pr-4 py-2 rounded-xl bg-white dark:bg-[#161b22] border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-[#161b22] rounded-xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm" style="min-height: 400px;">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-white/5">
+                                <tr>
+                                    <th class="px-6 py-4 font-semibold text-gray-500">User</th>
+                                    <th class="px-6 py-4 font-semibold text-gray-500">Status</th>
+                                    <th class="px-6 py-4 font-semibold text-gray-500">Role</th>
+                                    <th class="px-6 py-4 font-semibold text-gray-500 text-right">Menu</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                                <template x-for="u in filteredUsers" :key="u.id">
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                                        <td class="px-6 py-4">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center">
+                                                    <img x-show="u.avatar_url" :src="getAvatarUrl(u.avatar_url)" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                                                    <span x-show="!u.avatar_url" x-text="(u.username||'?').charAt(0).toUpperCase()" class="text-xs font-bold text-gray-500"></span>
+                                                </div>
+                                                <div>
+                                                    <div class="font-medium" x-text="u.username"></div>
+                                                    <div class="text-xs text-gray-500" x-text="u.email"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span x-show="!u.is_suspended" class="text-green-500 text-xs font-bold">Aktif</span>
+                                            <span x-show="u.is_suspended" class="text-red-500 text-xs font-bold">Banned</span>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <span class="px-2 py-1 rounded text-xs border" :class="u.role === 'admin' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-gray-100 text-gray-600'" x-text="u.role"></span>
+                                        </td>
+                                        <td class="px-6 py-4 text-right relative">
+                                            <button @click.stop="activeDropdown = (activeDropdown === u.id ? null : u.id)" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-white/5">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+                                            </button>
+                                            <div x-show="activeDropdown === u.id" x-transition.opacity class="absolute right-8 top-8 w-40 bg-white dark:bg-[#161b22] rounded-xl shadow-xl border border-gray-100 dark:border-white/10 z-50 overflow-hidden text-left" style="display: none;">
+                                                <button x-show="u.role !== 'admin'" @click="promoteUser(u)" class="w-full px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5 text-purple-600 font-medium flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>Jadikan Admin
+                                                </button>
+                                                <button x-show="!u.is_suspended && u.role !== 'admin'" @click="openDirectSuspend(u)" class="w-full px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5 text-red-600 flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>Suspend User
+                                                </button>
+                                                <button x-show="u.is_suspended" @click="unsuspendUser(u)" class="w-full px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5 text-green-600 flex items-center gap-2">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>Pulihkan Akun
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- REPORTS VIEW -->
+                <div x-show="currentView === 'reports'" x-transition.opacity x-cloak>
+                    <h2 class="text-2xl font-bold mb-6">Pusat Laporan</h2>
+                     <div class="space-y-4">
+                        <template x-for="report in filteredReports" :key="report.id">
+                            <div class="bg-white dark:bg-[#161b22] p-4 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col md:flex-row gap-4 justify-between">
+                                <div>
+                                    <p class="font-bold text-sm" x-text="report.target_type + ': ' + report.target_content"></p>
+                                    <p class="text-xs text-red-500" x-text="report.reason"></p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button @click="resolveReport(report.id, 'dismissed')" class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Abaikan</button>
+                                    <button @click="openSuspendModal(report)" class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Tindak</button>
+                                </div>
+                            </div>
+                        </template>
+                     </div>
+                </div>
+
+                <!-- FEEDBACK VIEW -->
+                <div x-show="currentView === 'feedback'" x-transition.opacity x-cloak>
+                    <h2 class="text-2xl font-bold mb-6">Feedback</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <template x-for="fb in feedbacks" :key="fb.id">
+                            <div class="p-4 bg-white dark:bg-[#161b22] rounded-xl border border-gray-200 dark:border-white/5">
+                                <span class="text-xs font-bold" :class="fb.sentiment=='positive'?'text-green-500':(fb.sentiment=='negative'?'text-red-500':'text-gray-500')" x-text="fb.sentiment"></span>
+                                <p class="text-sm mt-1" x-text="fb.text"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- SETTINGS VIEW -->
+                <div x-show="currentView === 'settings'" x-transition.opacity x-cloak>
+                    <h2 class="text-2xl font-bold mb-6">Pengaturan</h2>
+                    <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 mb-6">
+                         <h3 class="font-bold mb-4">Profil</h3>
+                         <div class="flex items-center gap-4 mb-4">
+                            <div class="w-16 h-16 rounded-full bg-gray-200 overflow-hidden relative group cursor-pointer border-2 border-dashed" @click="$refs.fileInput.click()">
+                                <img x-show="user.avatar_url" :src="getAvatarUrl(user.avatar_url)" class="w-full h-full object-cover">
+                                <div x-show="!user.avatar_url" class="w-full h-full flex items-center justify-center text-gray-400 font-bold" x-text="(user.display_name||'A').charAt(0)"></div>
+                            </div>
+                            <input type="file" x-ref="fileInput" @change="handleFileSelect" class="hidden" accept="image/*">
+                         </div>
+                         <input type="text" x-model="formProfile.display_name" class="w-full px-4 py-2 border rounded mb-2 dark:bg-[#0d1117] dark:border-gray-700" placeholder="Nama">
+                         <input type="text" x-model="formProfile.username" class="w-full px-4 py-2 border rounded mb-2 dark:bg-[#0d1117] dark:border-gray-700" placeholder="Username">
+                         <input type="email" x-model="formProfile.email" class="w-full px-4 py-2 border rounded mb-2 dark:bg-[#0d1117] dark:border-gray-700" placeholder="Email">
+                         <button @click="updateProfile()" class="w-full bg-blue-600 text-white py-2 rounded">Simpan</button>
+                    </div>
+                    <div class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5">
+                        <h3 class="font-bold mb-4">Keamanan</h3>
+                        <input type="password" x-model="oldPassword" placeholder="Password Lama" class="w-full px-4 py-2 border rounded mb-2 dark:bg-[#0d1117] dark:border-gray-700">
+                        <input type="password" x-model="newPassword" placeholder="Password Baru" class="w-full px-4 py-2 border rounded mb-2 dark:bg-[#0d1117] dark:border-gray-700">
+                        <button @click="changePassword()" class="w-full bg-gray-800 text-white py-2 rounded">Ubah Password</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Suspend -->
+    <div x-show="suspendModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-white dark:bg-[#161b22] rounded-2xl w-full max-w-md shadow-2xl p-6 border dark:border-white/10" @click.away="suspendModalOpen = false">
+           <h3 class="text-xl font-bold mb-4 dark:text-white">Pilih Hukuman</h3>
+           <div class="space-y-3">
+               <button @click="executeSuspend(3)" class="w-full text-left px-4 py-3 border rounded-xl hover:bg-yellow-50 dark:hover:bg-yellow-900/20 dark:border-gray-700 dark:text-gray-200">Suspend 3 Hari</button>
+               <button @click="executeSuspend(7)" class="w-full text-left px-4 py-3 border rounded-xl hover:bg-orange-50 dark:hover:bg-orange-900/20 dark:border-gray-700 dark:text-gray-200">Suspend 7 Hari</button>
+               <button @click="executeSuspend(-1)" class="w-full text-left px-4 py-3 border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 text-red-600 font-bold hover:bg-red-600 hover:text-white">BANNED PERMANEN</button>
+           </div>
+           <button @click="suspendModalOpen = false" class="mt-4 w-full py-2 text-gray-500">Batal</button>
+       </div>
+   </div>
+
+    <script>
+        function adminApp() {
+            return {
+                currentView: 'dashboard', reportTab: 'All', token: localStorage.getItem('authToken'),
+                user: JSON.parse(localStorage.getItem('currentUser') || '{}'),
+                isDark: localStorage.getItem('theme') === 'dark',
+                
+                stats: {}, reports: [], usersList: [], feedbacks: [], searchQuery: '',
+                activeDropdown: null, suspendModalOpen: false, selectedReport: null, suspendTargetId: null,
+                formProfile: { display_name: '', username: '', email: '', avatarFile: null }, oldPassword: '', newPassword: '',
+                currentStatsRange: '7d',
+
+                timeRanges: [
+                    { label: 'Hari Ini', val: 'today' },
+                    { label: '7 Hari', val: '7d' },
+                    { label: 'Bulan Ini', val: '30d' },
+                    { label: 'Tahun Ini', val: '1y' },
+                    { label: '5 Tahun', val: '5y' },
+                    { label: '10 Tahun', val: '10y' },
+                    { label: 'Semua', val: 'all' }
+                ],
+
+                navItems: [
+                    { id: 'dashboard', label: 'Dashboard', icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>' },
+                    { id: 'users', label: 'Pengguna', icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>' },
+                    { id: 'reports', label: 'Laporan', icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>' },
+                    { id: 'feedback', label: 'Feedback', icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>' }
+                ],
+
+                initApp() {
+                    if (!this.token) window.location.href = '/admin/login';
+                    if (this.isDark) document.documentElement.classList.add('dark');
+                    this.formProfile = { ...this.user, avatarFile: null };
+                    this.fetchStats(); this.fetchReports(); this.fetchUsers(); this.fetchFeedback();
+                },
+
+                setStatsRange(range) {
+                    this.currentStatsRange = range;
+                    this.fetchStats(); 
+                },
+
+                renderCharts(data) {
+                    if(!data) return;
+                    
+                    const commonOptions = {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { display: false, drawBorder: false }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+                            y: { beginAtZero: true, suggestedMax: 5, grid: { color: 'rgba(156, 163, 175, 0.1)', borderDash: [5, 5] }, ticks: { color: '#9ca3af', font: { size: 10 }, stepSize: 1, precision: 0 } }
+                        }
+                    };
+
+                    const ctxUsers = document.getElementById('chartUsers');
+                    if(ctxUsers) {
+                        if(window.myChartUsers) window.myChartUsers.destroy();
+                        window.myChartUsers = new Chart(ctxUsers, {
+                            type: 'line',
+                            data: {
+                                labels: data.labels,
+                                datasets: [{ label: 'User Baru', data: data.users, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 }]
+                            },
+                            options: commonOptions
+                        });
+                    }
+
+                    const ctxPosts = document.getElementById('chartPosts');
+                    if(ctxPosts) {
+                        if(window.myChartPosts) window.myChartPosts.destroy();
+                        window.myChartPosts = new Chart(ctxPosts, {
+                            type: 'bar',
+                            data: {
+                                labels: data.labels,
+                                datasets: [{ label: 'Postingan', data: data.posts, backgroundColor: '#10b981', borderRadius: 4 }]
+                            },
+                            options: commonOptions
+                        });
+                    }
+
+                    const ctxReports = document.getElementById('chartReports');
+                    if(ctxReports) {
+                        if(window.myChartReports) window.myChartReports.destroy();
+                        window.myChartReports = new Chart(ctxReports, {
+                            type: 'line',
+                            data: {
+                                labels: data.labels,
+                                datasets: [{ label: 'Laporan', data: data.reports, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, tension: 0.4 }]
+                            },
+                            options: commonOptions
+                        });
+                    }
+
+                    const ctxSent = document.getElementById('chartSentiment');
+                    if(ctxSent && this.stats.sentiment_data) {
+                        if(window.myChartSent) window.myChartSent.destroy();
+                        window.myChartSent = new Chart(ctxSent, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['Positif', 'Negatif'],
+                                datasets: [{ data: this.stats.sentiment_data, backgroundColor: ['#22c55e', '#ef4444'], borderWidth: 0 }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                        });
+                    }
+                },
+
+                get filteredUsers() {
+                    if (this.searchQuery === '') return this.usersList;
+                    const q = this.searchQuery.toLowerCase();
+                    return this.usersList.filter(u => (u.username && u.username.toLowerCase().includes(q)) || (u.email && u.email.toLowerCase().includes(q)));
+                },
+                get filteredReports() { return this.reportTab === 'All' ? this.reports : this.reports.filter(r => r.target_type === this.reportTab); },
+                getAvatarUrl(path) { if(!path) return ''; if(path.startsWith('http')) return path; return '/static/uploads/' + path; },
+                
+                async authFetch(url, opts={}) {
+                    const headers = { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json', ...opts.headers };
+                    const res = await fetch(url, { ...opts, headers });
+                    if (res.status === 401 || res.status === 403) { this.logout(); return null; }
+                    return res.json();
+                },
+
+                // --- PERBAIKAN DI SINI ---
+                async fetchStats() { 
+                    // Ambil offset timezone user (otomatis browser). Contoh: -420 (WIB)
+                    const tzOffset = new Date().getTimezoneOffset();
+                    // Kirim offset ke backend
+                    const url = `/admin/stats?range=${this.currentStatsRange}&tz_offset=${tzOffset}`;
+                    
+                    this.stats = await this.authFetch(url) || {}; 
+                    if(this.stats.chart_data) setTimeout(() => this.renderCharts(this.stats.chart_data), 100); 
+                },
+                // -------------------------
+
+                async fetchReports() { this.reports = await this.authFetch('/admin/reports') || []; },
+                async fetchUsers() { this.usersList = await this.authFetch('/admin/users-list') || []; },
+                async fetchFeedback() { this.feedbacks = await this.authFetch('/admin/feedbacks') || []; },
+
+                openDirectSuspend(u) { this.selectedReport = null; this.suspendTargetId = u.id; this.suspendModalOpen = true; this.activeDropdown = null; },
+                openSuspendModal(r) { this.selectedReport = r; this.suspendTargetId = r.target_user_id; this.suspendModalOpen = true; },
+                
+                async executeSuspend(days) {
+                    if(!this.suspendTargetId) return alert("Target Error");
+                    const res = await this.authFetch('/admin/users/suspend', { method: 'POST', body: JSON.stringify({ user_id: this.suspendTargetId, days }) });
+                    if(res?.message) {
+                        alert(res.message);
+                        if(this.selectedReport) this.authFetch(`/admin/reports/${this.selectedReport.id}/resolve`, { method: 'POST', body: JSON.stringify({action:'resolved'})});
+                        this.suspendModalOpen = false; this.fetchUsers(); this.fetchReports();
+                    }
+                },
+                async unsuspendUser(u) {
+                    if(!confirm("Pulihkan akun " + u.username + "?")) return;
+                    const res = await this.authFetch('/admin/users/unsuspend', { method: 'POST', body: JSON.stringify({ user_id: u.id }) });
+                    if(res?.message) { alert(res.message); this.activeDropdown = null; this.fetchUsers(); }
+                },
+                async promoteUser(u) {
+                    if(!confirm("Jadikan Admin?")) return;
+                    const res = await this.authFetch('/admin/users/promote', { method: 'POST', body: JSON.stringify({ user_id: u.id }) });
+                    if(res?.message) { alert(res.message); this.activeDropdown = null; this.fetchUsers(); }
+                },
+                async resolveReport(id, action) { if(confirm("Tandai selesai?")) { await this.authFetch(`/admin/reports/${id}/resolve`, { method: 'POST', body: JSON.stringify({action})}); this.fetchReports(); } },
+                
+                handleFileSelect(e) { if(e.target.files.length) this.formProfile.avatarFile = e.target.files[0]; },
+                async updateProfile() {
+                    const formData = new FormData();
+                    formData.append('display_name', this.formProfile.display_name);
+                    formData.append('username', this.formProfile.username);
+                    formData.append('email', this.formProfile.email);
+                    if(this.formProfile.avatarFile) formData.append('avatar', this.formProfile.avatarFile);
+                    const res = await fetch('/admin/update-profile', { method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token }, body: formData });
+                    const data = await res.json();
+                    if(res.ok) { alert(data.message); this.user = data.user; localStorage.setItem('currentUser', JSON.stringify(data.user)); } else alert(data.message || data.error);
+                },
+                async changePassword() {
+                    const res = await this.authFetch('/admin/change-password', { method: 'POST', body: JSON.stringify({ old_password: this.oldPassword, new_password: this.newPassword }) });
+                    if(res?.message) { alert(res.message); this.newPassword = ''; this.oldPassword = ''; } else if(res?.error) alert(res.error);
+                },
+
+                toggleTheme() { this.isDark = !this.isDark; document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', this.isDark ? 'dark' : 'light'); },
+                logout() { localStorage.removeItem('authToken'); localStorage.removeItem('currentUser'); window.location.href = '/admin/login'; }
+            }
+        }
+    </script>
+</body>
+</html>

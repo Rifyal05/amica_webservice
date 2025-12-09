@@ -1,0 +1,12 @@
+*.onnx filter=lfs diff=lfs merge=lfs -text
+models_ml/text/**/*.csv filter=lfs diff=lfs merge=lfs -text
+app/static/images/icons/*.png filter=lfs diff=lfs merge=lfs -text
+app/static/images/*.png filter=lfs diff=lfs merge=lfs -text
+models_ml/image/gatekeeper.onnx filter=lfs diff=lfs merge=lfs -text
+models_ml/image/specialist.onnx filter=lfs diff=lfs merge=lfs -text
+models_ml/text/feedback/feedback_sentiment.onnx filter=lfs diff=lfs merge=lfs -text
+models_ml/text/feedback/feedback_vocab.csv filter=lfs diff=lfs merge=lfs -text
+models_ml/text/post/post_classifier.onnx filter=lfs diff=lfs merge=lfs -text
+models_ml/text/post/post_vocab_idf.csv filter=lfs diff=lfs merge=lfs -text
+models_ml/**/*.onnx filter=lfs diff=lfs merge=lfs -text
+models_ml/**/*.csv filter=lfs diff=lfs merge=lfs -text

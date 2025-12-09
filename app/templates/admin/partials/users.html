@@ -1,0 +1,358 @@
+<div x-show="currentView === 'users'" x-transition.opacity x-cloak>
+
+    <!-- Header -->
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Manajemen Pengguna</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Kelola akses dan hierarki komunitas.</p>
+        </div>
+        <div class="flex gap-2">
+            <div
+                class="bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                        d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z">
+                    </path>
+                </svg>
+                <span x-text="keyPeople.length + ' Petinggi'"></span>
+            </div>
+            <div
+                class="bg-blue-50 dark:bg-blue-900/20 text-blue-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
+                    </path>
+                </svg>
+                <span x-text="pagination.total + ' User'"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. ACTION BLOCKS (Manajemen Cepat) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 relative z-30"> <!-- z-30 agar di atas tabel -->
+
+        <!-- Block 1: Manajemen Role -->
+        <div
+            class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm relative group overflow-visible">
+            <h3 class="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                <span class="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600"><svg class="w-4 h-4"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                        </path>
+                    </svg></span>
+                Manajemen Role
+            </h3>
+
+            <div class="space-y-3">
+                <!-- Wrapper Input Relative untuk Dropdown -->
+                <div class="relative z-50" @click.outside="if(activeSearch==='manage') suggestions=[]">
+                    <input type="text" x-model="manageForm.email"
+                        @input.debounce.300ms="searchSuggestions(manageForm.email, 'manage')"
+                        placeholder="Ketik Nama / Email User..."
+                        class="w-full px-4 py-2 rounded-xl bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+
+                    <!-- Dropdown Saran -->
+                    <div x-show="suggestions.length > 0 && activeSearch === 'manage'"
+                        x-transition.opacity.duration.200ms
+                        class="absolute top-full left-0 w-full mt-2 bg-white dark:bg-[#1e252e] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden max-h-60 overflow-y-auto ring-1 ring-black/10 z-[100]">
+                        <template x-for="s in suggestions">
+                            <div @click="selectSuggestion(s.email)"
+                                class="px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer flex items-center gap-3 transition border-b border-gray-100 dark:border-white/5 last:border-0">
+                                <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0">
+                                    <img x-show="s.avatar_url" :src="getAvatarUrl(s.avatar_url)"
+                                        class="w-full h-full object-cover">
+                                </div>
+                                <div class="overflow-hidden">
+                                    <p class="text-sm font-bold text-gray-800 dark:text-gray-200 truncate"
+                                        x-text="s.username"></p>
+                                    <p class="text-xs text-gray-500 truncate" x-text="s.email"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <select x-model="manageForm.role"
+                        class="px-4 py-2 rounded-xl bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-gray-700 text-sm outline-none">
+                        <option value="admin">Jadikan Admin</option>
+                        <option value="user">Turunkan ke User</option>
+                    </select>
+                    <button @click="quickChangeRole()"
+                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all">
+                        Terapkan
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Block 2: Quick Suspend -->
+        <div
+            class="bg-white dark:bg-[#161b22] p-6 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm relative group overflow-visible">
+            <h3 class="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                <span class="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600"><svg class="w-4 h-4"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636">
+                        </path>
+                    </svg></span>
+                Suspend Cepat
+            </h3>
+
+            <div class="space-y-3">
+                <div class="relative z-50" @click.outside="if(activeSearch==='suspend') suggestions=[]">
+                    <input type="text" x-model="suspendForm.email"
+                        @input.debounce.300ms="searchSuggestions(suspendForm.email, 'suspend')"
+                        placeholder="Ketik Nama / Email User..."
+                        class="w-full px-4 py-2 rounded-xl bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-gray-700 text-sm focus:ring-2 focus:ring-red-500 outline-none">
+
+                    <div x-show="suggestions.length > 0 && activeSearch === 'suspend'"
+                        x-transition.opacity.duration.200ms
+                        class="absolute top-full left-0 w-full mt-2 bg-white dark:bg-[#1e252e] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden max-h-60 overflow-y-auto ring-1 ring-black/10 z-[100]">
+                        <template x-for="s in suggestions">
+                            <div @click="selectSuggestion(s.email)"
+                                class="px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer flex items-center gap-3 transition border-b border-gray-100 dark:border-white/5 last:border-0">
+                                <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0">
+                                    <img x-show="s.avatar_url" :src="getAvatarUrl(s.avatar_url)"
+                                        class="w-full h-full object-cover">
+                                </div>
+                                <div class="overflow-hidden">
+                                    <p class="text-sm font-bold text-gray-800 dark:text-gray-200 truncate"
+                                        x-text="s.username"></p>
+                                    <p class="text-xs text-gray-500 truncate" x-text="s.email"></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <select x-model="suspendForm.days"
+                        class="px-4 py-2 rounded-xl bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-gray-700 text-sm outline-none">
+                        <option value="3">3 Hari</option>
+                        <option value="7">7 Hari</option>
+                        <option value="-1">Permanen</option>
+                    </select>
+                    <button @click="quickSuspend()"
+                        class="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-500/20 transition-all">
+                        Hukum
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. STRUKTUR ORGANISASI -->
+
+    <!-- A. BLOK OWNER -->
+    <div class="mb-8" x-show="ownersList.length > 0">
+        <h3 class="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+            <span class="p-1 rounded bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                        d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z">
+                    </path>
+                </svg>
+            </span>
+            Board of Owners
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="p in ownersList" :key="p.id">
+                <div
+                    class="bg-gradient-to-r from-yellow-50 to-white dark:from-yellow-900/10 dark:to-[#161b22] p-4 rounded-xl border border-yellow-200 dark:border-yellow-800 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:shadow-md transition">
+                    <div
+                        class="w-12 h-12 rounded-full border-2 border-yellow-300 dark:border-yellow-700 p-0.5 bg-white dark:bg-[#0d1117] shrink-0">
+                        <div
+                            class="w-full h-full rounded-full overflow-hidden bg-yellow-100 flex items-center justify-center">
+                            <img x-show="p.avatar_url" :src="getAvatarUrl(p.avatar_url)"
+                                class="w-full h-full object-cover" referrerpolicy="no-referrer"
+                                onerror="this.style.display='none'">
+                            <span x-show="!p.avatar_url" x-text="(p.username||'?').charAt(0)"
+                                class="text-lg font-bold text-yellow-600"></span>
+                        </div>
+                    </div>
+                    <div class="overflow-hidden z-10">
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-bold text-gray-800 dark:text-gray-100 truncate" x-text="p.username"></h4>
+                            <span
+                                class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800">Owner</span>
+                        </div>
+                        <p class="text-xs text-gray-500 truncate" x-text="p.email"></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- B. BLOK ADMIN (Dengan Indikator BANNED) -->
+    <div class="mb-8" x-show="adminsList.length > 0">
+        <h3 class="font-bold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+            <span class="p-1 rounded bg-purple-100 text-purple-600 dark:bg-purple-900/30">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
+                    </path>
+                </svg>
+            </span>
+            Administrators
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="p in adminsList" :key="p.id">
+                <div class="bg-white dark:bg-[#161b22] p-4 rounded-xl border shadow-sm flex items-center gap-4 relative overflow-hidden group transition"
+                    :class="p.is_suspended ? 'border-red-500 dark:border-red-600 bg-red-50/50 dark:bg-red-900/10' : 'border-gray-200 dark:border-white/5 hover:border-purple-300 dark:hover:border-purple-800'">
+
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden shrink-0"
+                        :class="p.is_suspended ? 'bg-red-100 dark:bg-red-800' : 'bg-gray-100 dark:bg-gray-700'">
+                        <img x-show="p.avatar_url" :src="getAvatarUrl(p.avatar_url)" class="w-full h-full object-cover"
+                            referrerpolicy="no-referrer" onerror="this.style.display='none'">
+                        <span x-show="!p.avatar_url" x-text="(p.username||'?').charAt(0)" class="text-lg font-bold"
+                            :class="p.is_suspended ? 'text-red-500 dark:text-red-200' : 'text-purple-500'"></span>
+                    </div>
+
+                    <div class="overflow-hidden z-10 w-full pr-8">
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-bold truncate"
+                                :class="p.is_suspended ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-white'"
+                                x-text="p.username"></h4>
+                            <!-- Badge Admin Normal -->
+                            <span x-show="!p.is_suspended"
+                                class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">Admin</span>
+                            <!-- Badge BANNED -->
+                            <span x-show="p.is_suspended"
+                                class="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-red-600 text-white animate-pulse">BANNED</span>
+                        </div>
+                        <p class="text-xs truncate" :class="p.is_suspended ? 'text-red-500/70' : 'text-gray-500'"
+                            x-text="p.email"></p>
+                    </div>
+
+                    <!-- Tombol Suspend Admin (Hanya Owner yang lihat) -->
+                    <button x-show="user.role === 'owner'"
+                        @click="p.is_suspended ? unsuspendUser(p) : openDirectSuspend(p)"
+                        class="absolute right-2 top-2 w-10 h-10 flex items-center justify-center rounded-xl transition border shadow-sm z-20 cursor-pointer"
+                        :class="p.is_suspended ? 'bg-white text-green-600 border-green-200 hover:bg-green-50 dark:bg-gray-800 dark:border-green-900' : 'bg-white text-gray-400 border-transparent hover:text-red-500 hover:bg-red-50 dark:bg-transparent hover:border-red-200'"
+                        :title="p.is_suspended ? 'Pulihkan Admin' : 'Suspend Admin'">
+
+                        <svg x-show="!p.is_suspended" class="w-5 h-5" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636">
+                            </path>
+                        </svg>
+
+                        <svg x-show="p.is_suspended" class="w-5 h-5" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- 3. TABEL USER BIASA -->
+    <div
+        class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm flex flex-col relative z-10">
+        <!-- Toolbar Table -->
+        <div
+            class="p-4 border-b border-gray-100 dark:border-white/5 flex flex-col md:flex-row gap-4 justify-between items-center">
+            <h3 class="font-bold text-gray-700 dark:text-gray-300">Daftar Pengguna Biasa</h3>
+            <div class="relative w-full md:w-72">
+                <input type="text" x-model="searchQuery" @input.debounce.500ms="fetchRegularUsers(1)"
+                    placeholder="Cari user..."
+                    class="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-50 dark:bg-[#0d1117] border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-blue-500 text-sm transition">
+                <svg class="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead
+                    class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-white/5 text-xs uppercase tracking-wider text-gray-500">
+                    <tr>
+                        <th class="px-6 py-4 font-semibold">User Details</th>
+                        <th class="px-6 py-4 font-semibold text-center">Status</th>
+                        <th class="px-6 py-4 font-semibold text-center">Tgl Daftar</th>
+                        <th class="px-6 py-4 font-semibold text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <template x-for="u in regularUsers" :key="u.id">
+                        <tr class="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition duration-200">
+                            <!-- Kolom User -->
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden flex items-center justify-center shrink-0 border border-gray-200 dark:border-gray-600">
+                                        <img x-show="u.avatar_url" :src="getAvatarUrl(u.avatar_url)"
+                                            class="w-full h-full object-cover" onerror="this.style.display='none'">
+                                        <span x-show="!u.avatar_url" x-text="(u.username||'?').charAt(0).toUpperCase()"
+                                            class="text-sm font-bold text-gray-500"></span>
+                                    </div>
+                                    <div class="overflow-hidden">
+                                        <div class="font-bold text-gray-800 dark:text-gray-200 truncate"
+                                            x-text="u.username"></div>
+                                        <div class="text-xs text-gray-500 truncate" x-text="u.email"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <!-- Kolom Status -->
+                            <td class="px-6 py-4 text-center">
+                                <span x-show="!u.is_suspended"
+                                    class="text-green-600 bg-green-100 px-2 py-0.5 rounded text-xs dark:bg-green-900/30 dark:text-green-400">Aktif</span>
+                                <span x-show="u.is_suspended"
+                                    class="text-red-600 bg-red-100 px-2 py-0.5 rounded text-xs dark:bg-red-900/30 dark:text-red-400">Banned</span>
+                            </td>
+                            <!-- Kolom Tanggal -->
+                            <td class="px-6 py-4 text-center text-xs text-gray-500" x-text="u.created_at"></td>
+                            <!-- Kolom Aksi -->
+                            <td class="px-6 py-4 text-right relative">
+                                <button @click.stop="activeDropdown = (activeDropdown === u.id ? null : u.id)"
+                                    class="p-2 text-gray-400 hover:text-blue-600 rounded-lg transition">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z">
+                                        </path>
+                                    </svg>
+                                </button>
+                                <div x-show="activeDropdown === u.id" @click.away="activeDropdown = null" x-transition
+                                    class="absolute right-8 top-8 w-40 bg-white dark:bg-[#1e252e] rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden text-left"
+                                    style="display:none">
+                                    <button @click="promoteUser(u)"
+                                        class="w-full px-4 py-2 text-xs hover:bg-purple-50 text-purple-600 flex items-center gap-2">Naikkan
+                                        Admin</button>
+                                    <button x-show="!u.is_suspended" @click="openDirectSuspend(u)"
+                                        class="w-full px-4 py-2 text-xs hover:bg-red-50 text-red-600 flex items-center gap-2">Suspend</button>
+                                    <button x-show="u.is_suspended" @click="unsuspendUser(u)"
+                                        class="w-full px-4 py-2 text-xs hover:bg-green-50 text-green-600 flex items-center gap-2">Pulihkan</button>
+                                    <div class="h-px bg-gray-100 dark:bg-gray-700"></div>
+                                    <button @click="deleteUserById(u)"
+                                        class="w-full px-4 py-2 text-xs hover:bg-red-50 text-red-600 font-bold flex items-center gap-2">Hapus</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="p-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
+            <span class="text-xs text-gray-500">Halaman <span x-text="pagination.current_page"></span> dari <span
+                    x-text="pagination.pages"></span></span>
+            <div class="flex gap-2">
+                <button @click="changePage(pagination.current_page - 1)" :disabled="pagination.current_page <= 1"
+                    class="px-3 py-1 text-xs border rounded hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800">Prev</button>
+                <button @click="changePage(pagination.current_page + 1)"
+                    :disabled="pagination.current_page >= pagination.pages"
+                    class="px-3 py-1 text-xs border rounded hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800">Next</button>
+            </div>
+        </div>
+    </div>
+</div>

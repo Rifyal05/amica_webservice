@@ -1,0 +1,17 @@
+<div x-show="currentView === 'reports'" x-transition.opacity x-cloak>
+    <h2 class="text-2xl font-bold mb-6">Pusat Laporan</h2>
+     <div class="space-y-4">
+        <template x-for="report in filteredReports" :key="report.id">
+            <div class="bg-white dark:bg-[#161b22] p-4 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col md:flex-row gap-4 justify-between">
+                <div>
+                    <p class="font-bold text-sm" x-text="report.target_type + ': ' + report.target_content"></p>
+                    <p class="text-xs text-red-500" x-text="report.reason"></p>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="resolveReport(report.id, 'dismissed')" class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Abaikan</button>
+                    <button @click="openSuspendModal(report)" class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Tindak</button>
+                </div>
+            </div>
+        </template>
+     </div>
+</div>

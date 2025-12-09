@@ -1,0 +1,11 @@
+<div x-show="suspendModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-cloak>
+    <div class="bg-white dark:bg-[#161b22] rounded-2xl w-full max-w-md shadow-2xl p-6 border dark:border-white/10" @click.away="suspendModalOpen = false">
+       <h3 class="text-xl font-bold mb-4 dark:text-white">Pilih Hukuman</h3>
+       <div class="space-y-3">
+           <button @click="executeSuspend(3)" class="w-full text-left px-4 py-3 border rounded-xl hover:bg-yellow-50 dark:hover:bg-yellow-900/20 dark:border-gray-700 dark:text-gray-200">Suspend 3 Hari</button>
+           <button @click="executeSuspend(7)" class="w-full text-left px-4 py-3 border rounded-xl hover:bg-orange-50 dark:hover:bg-orange-900/20 dark:border-gray-700 dark:text-gray-200">Suspend 7 Hari</button>
+           <button @click="executeSuspend(-1)" class="w-full text-left px-4 py-3 border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 text-red-600 font-bold hover:bg-red-600 hover:text-white">BANNED PERMANEN</button>
+       </div>
+       <button @click="suspendModalOpen = false" class="mt-4 w-full py-2 text-gray-500">Batal</button>
+   </div>
+</div>

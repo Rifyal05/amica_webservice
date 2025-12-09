@@ -1,0 +1,152 @@
+{% extends "test/test_moderation.html" %}
+{% block title %}Halaman Tes - Amica Web{% endblock %}
+
+{% block content %}
+<style>
+    .content-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 8px 8px 0 0;
+    }
+
+    .content-header h1 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 600;
+    }
+
+    .test-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 2rem;
+    }
+
+    .test-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .test-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .test-card h2 {
+        color: #333;
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        font-size: 1.25rem;
+    }
+
+    .test-card form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    textarea, input[type="file"] {
+        padding: 0.75rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 0.95rem;
+        transition: border-color 0.3s ease;
+    }
+
+    textarea:focus, input[type="file"]:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+
+    textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        opacity: 0.9;
+    }
+
+    .result-box {
+        background: #f5f5f5;
+        border-left: 4px solid #667eea;
+        padding: 1rem;
+        border-radius: 4px;
+        color: #555;
+        font-size: 0.95rem;
+    }
+
+    .image-preview {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 6px;
+        margin-top: 1rem;
+    }
+</style>
+
+<div class="content-header" style="padding: 2rem 2rem 0 2rem;">
+    <h1>Halaman Uji Coba Moderasi</h1>
+</div>
+
+<div class="test-container" style="padding: 2rem;">
+    <div class="test-card">
+        <h2>Uji Coba Moderasi Postingan (Teks)</h2>
+        <form id="text-test-form">
+            <textarea id="test-caption" placeholder="Ketik kalimat untuk diuji..."></textarea>
+            <button type="submit" id="text-test-button" class="btn-primary">Uji Teks</button>
+        </form>
+        <div id="text-result" class="result-box">Hasil akan muncul di sini.</div>
+    </div>
+
+    <div class="test-card">
+        <h2>Uji Coba Moderasi Gambar</h2>
+        <form id="image-test-form">
+            <input type="file" id="test-image" accept="image/*">
+            <img id="preview-image" class="image-preview" style="display: none;">
+            <button type="submit" id="image-test-button" class="btn-primary">Uji Gambar</button>
+        </form>
+        <div id="image-result" class="result-box">Hasil akan muncul di sini.</div>
+    </div>
+    
+    <div class="test-card">
+        <h2>Uji Coba Sentimen Feedback</h2>
+        <form id="feedback-test-form">
+            <textarea id="test-feedback" placeholder="Ketik ulasan atau feedback..."></textarea>
+            <button type="submit" id="feedback-test-button" class="btn-primary">Uji Sentimen</button>
+        </form>
+        <div id="feedback-result" class="result-box">Hasil akan muncul di sini.</div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('test-image').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const preview = document.getElementById('preview-image');
+        
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                preview.src = event.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            preview.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

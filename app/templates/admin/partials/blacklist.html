@@ -1,0 +1,106 @@
+<div x-show="currentView === 'blacklist'" x-transition.opacity x-cloak>
+    
+    <!-- Header (Biarkan seperti sebelumnya) -->
+   <div class="mb-8">
+        <h2 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <span class="p-2 bg-red-100 text-red-600 rounded-lg dark:bg-red-900/30">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+            </span>
+            Daftar Hitam (Blacklist)
+        </h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Daftar pengguna yang sedang menjalani hukuman atau dibanned permanen.</p>
+    </div>
+    <!-- TOOLBAR (SEARCH & REFRESH) - BARU -->
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+        
+        <!-- Search Bar -->
+        <div class="relative w-full md:w-80">
+            <input type="text" 
+                   x-model="blacklistQuery" 
+                   @input.debounce.500ms="fetchBannedUsers(1)" 
+                   placeholder="Cari user terhukum..." 
+                   class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-[#161b22] border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-red-500 text-sm transition shadow-sm">
+            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
+
+        <!-- Refresh Button -->
+        <button @click="refreshBlacklist()" 
+                class="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-[#161b22] border border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 rounded-xl text-sm font-bold transition shadow-sm active:scale-95">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            Refresh Data
+        </button>
+    </div>
+
+    <!-- Empty State -->
+    <div x-show="bannedList.length === 0" class="text-center py-20 bg-white dark:bg-[#161b22] rounded-2xl border border-gray-200 dark:border-white/5 border-dashed">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <h3 class="text-lg font-bold text-gray-700 dark:text-gray-300">Bersih!</h3>
+        <p class="text-gray-500">Tidak ada pengguna yang sedang dibanned saat ini.</p>
+    </div>
+
+    <!-- Table -->
+    <div x-show="bannedList.length > 0" class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30 text-xs uppercase tracking-wider text-red-600 dark:text-red-400">
+                    <tr>
+                        <th class="px-6 py-4 font-bold">Terhukum</th>
+                        <th class="px-6 py-4 font-bold text-center">Tipe Hukuman</th>
+                        <th class="px-6 py-4 font-bold text-center">Berakhir Pada</th>
+                        <th class="px-6 py-4 font-bold text-right">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <template x-for="u in bannedList" :key="u.id">
+                        <tr class="group hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                            
+                            <!-- User Info -->
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0 grayscale opacity-70">
+                                        <img x-show="u.avatar_url" :src="getAvatarUrl(u.avatar_url)" class="w-full h-full object-cover">
+                                        <span x-show="!u.avatar_url" x-text="(u.username||'?').charAt(0)" class="text-sm font-bold"></span>
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-gray-800 dark:text-gray-200" x-text="u.username"></div>
+                                        <div class="text-xs text-gray-500" x-text="u.email"></div>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Tipe -->
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 rounded-full text-xs font-bold border"
+                                      :class="u.status_label === 'PERMANEN' ? 'bg-black text-white border-black dark:bg-white dark:text-black' : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'"
+                                      x-text="u.status_label"></span>
+                            </td>
+
+                            <!-- Tanggal -->
+                            <td class="px-6 py-4 text-center font-mono text-xs text-gray-600 dark:text-gray-400" x-text="u.until"></td>
+
+                            <!-- Aksi -->
+                            <td class="px-6 py-4 text-right">
+                                <button @click="unsuspendUser(u, true)" 
+                                        class="px-4 py-2 bg-green-50 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 rounded-lg text-xs font-bold transition flex items-center gap-2 ml-auto">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    Pulihkan
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="p-4 border-t border-gray-100 dark:border-white/5 flex justify-between items-center" x-show="bannedPagination.pages > 1">
+            <span class="text-xs text-gray-500">Halaman <span x-text="bannedPagination.current_page"></span> dari <span x-text="bannedPagination.pages"></span></span>
+            <div class="flex gap-2">
+                <button @click="fetchBannedUsers(bannedPagination.current_page - 1)" :disabled="bannedPagination.current_page <= 1" class="px-3 py-1 border rounded text-xs disabled:opacity-50 dark:border-gray-700">Prev</button>
+                <button @click="fetchBannedUsers(bannedPagination.current_page + 1)" :disabled="bannedPagination.current_page >= bannedPagination.pages" class="px-3 py-1 border rounded text-xs disabled:opacity-50 dark:border-gray-700">Next</button>
+            </div>
+        </div>
+    </div>
+</div>

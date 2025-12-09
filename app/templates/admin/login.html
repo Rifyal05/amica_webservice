@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Amica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script> tailwind.config = { darkMode: 'class' } </script>
+</head>
+
+<body
+    class="bg-gray-50 dark:bg-[#0d1117] h-screen flex items-center justify-center font-['Inter'] transition-colors duration-300"
+    x-data="loginPage()" x-init="init()">
+
+    <div
+        class="bg-white dark:bg-[#161b22] p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-100 dark:border-white/5 relative">
+
+        <!-- Theme Toggle -->
+        <button @click="toggleTheme()"
+            class="absolute top-4 right-4 p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+            <span x-show="!isDark">🌙</span><span x-show="isDark">☀️</span>
+        </button>
+
+        <div class="text-center mb-8 mt-2">
+            <h1 class="text-3xl font-bold text-blue-600 dark:text-blue-500 mb-2">Amica Admin</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-sm">Masuk untuk mengelola sistem</p>
+        </div>
+
+        <!-- Form Manual -->
+        <form @submit.prevent="handleEmailLogin" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                <input type="email" x-model="email" required placeholder="admin@amica.com"
+                    class="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0d1117] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                <input type="password" x-model="password" required placeholder="••••••••"
+                    class="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0d1117] text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition">
+            </div>
+
+            <button type="submit" :disabled="loading"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-blue-600/20 disabled:opacity-70 flex justify-center items-center h-12">
+                <span x-show="!loading">Masuk</span>
+                <svg x-show="loading" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg"
+                    fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                    </path>
+                </svg>
+            </button>
+        </form>
+
+        <div class="relative my-6">
+            <div class="absolute inset-0 flex items-center">
+                <div class="w-full border-t border-gray-200 dark:border-gray-700"></div>
+            </div>
+            <div class="relative flex justify-center text-xs uppercase"><span
+                    class="px-2 bg-white dark:bg-[#161b22] text-gray-400">atau masuk dengan</span></div>
+        </div>
+
+        <!-- Tombol Google -->
+        <button @click="handleGoogleLogin" :disabled="loading"
+            class="w-full flex items-center justify-center gap-3 bg-white dark:bg-[#21262d] border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-[#30363d] text-gray-700 dark:text-gray-200 font-semibold py-3 px-4 rounded-xl transition-all disabled:opacity-50">
+            <svg class="w-5 h-5" viewBox="0 0 24 24">
+                <path
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    fill="#4285F4" />
+                <path
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    fill="#34A853" />
+                <path
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    fill="#FBBC05" />
+                <path
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    fill="#EA4335" />
+            </svg>
+            Google
+        </button>
+
+        <!-- Error Message -->
+        <div x-show="errorMsg" x-transition
+            class="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-center gap-2">
+            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-sm text-red-600 dark:text-red-300" x-text="errorMsg"></p>
+        </div>
+    </div>
+
+    <!-- Modal PIN Login -->
+    <div x-show="showPinModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-white dark:bg-[#161b22] p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 dark:border-white/10 text-center">
+            <h3 class="text-xl font-bold mb-2 text-gray-800 dark:text-white">Verifikasi PIN</h3>
+            <p class="text-sm text-gray-500 mb-6">Masukkan 6 digit PIN keamanan Anda.</p>
+            
+            <div class="flex justify-center gap-2 mb-6">
+                <input type="password" x-model="pinInput" x-ref="pinInput" maxlength="6" 
+                    class="w-40 text-center text-3xl tracking-[0.5em] px-2 py-2 rounded-lg bg-gray-100 dark:bg-[#0d1117] border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                    @keyup.enter="submitPin" autofocus>
+            </div>
+
+            <button @click="submitPin" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-500/30">
+                <span x-show="!loading">Buka Dashboard</span>
+                <span x-show="loading" class="animate-pulse">Memproses...</span>
+            </button>
+            <button @click="showPinModal = false; pinInput = ''; loading = false;" class="mt-4 text-sm text-gray-500 hover:text-gray-400">Batal</button>
+        </div>
+    </div>
+
+    <!-- 1. Firebase SETUP (Module) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = {{ firebase_config | tojson }};
+
+        if (firebaseConfig && firebaseConfig.apiKey) {
+            const app = initializeApp(firebaseConfig);
+            window.firebaseAuth = getAuth(app);
+            window.googleProvider = new GoogleAuthProvider();
+            window.signInWithPopup = signInWithPopup;
+        } else {
+            console.error("Firebase config missing!");
+        }
+    </script>
+
+    <!-- 2. Alpine Logic -->
+    <script>
+        function loginPage() {
+            return {
+                email: '', password: '',
+                loading: false, errorMsg: '',
+                isDark: localStorage.getItem('theme') === 'dark',
+                // STATE PIN
+                showPinModal: false, 
+                pinInput: '', 
+                tempUserId: null,
+
+                init() {
+                    if (this.isDark) document.documentElement.classList.add('dark');
+                    if (localStorage.getItem('authToken')) window.location.href = '/admin/dashboard';
+                },
+
+                toggleTheme() {
+                    this.isDark = !this.isDark;
+                    if (this.isDark) {
+                        document.documentElement.classList.add('dark');
+                        localStorage.setItem('theme', 'dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                        localStorage.setItem('theme', 'light');
+                    }
+                },
+
+                async handleEmailLogin() {
+                    this.loading = true; this.errorMsg = '';
+                    try {
+                        const res = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: this.email, password: this.password })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Gagal login');
+
+                        // JIKA BUTUH PIN
+                        if (data.status === 'pin_required') {
+                            this.tempUserId = data.temp_id;
+                            this.showPinModal = true;
+                            this.loading = false;
+                            setTimeout(() => { if(this.$refs.pinInput) this.$refs.pinInput.focus(); }, 100);
+                            return;
+                        }
+
+                        this.processSuccess(data);
+                    } catch (err) {
+                        this.errorMsg = err.message;
+                        this.loading = false;
+                    }
+                },
+
+                async handleGoogleLogin() {
+                    if (!window.firebaseAuth) {
+                        this.errorMsg = "Konfigurasi Firebase belum siap. Coba refresh.";
+                        return;
+                    }
+
+                    this.loading = true; this.errorMsg = '';
+                    try {
+                        const result = await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
+                        const idToken = await result.user.getIdToken();
+
+                        const res = await fetch('/api/auth/google-login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: idToken })
+                        });
+
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Login Google Gagal');
+
+                        // JIKA BUTUH PIN
+                        if (data.status === 'pin_required') {
+                            this.tempUserId = data.temp_id;
+                            this.showPinModal = true;
+                            this.loading = false;
+                            setTimeout(() => { if(this.$refs.pinInput) this.$refs.pinInput.focus(); }, 100);
+                            return;
+                        }
+
+                        this.processSuccess(data);
+
+                    } catch (err) {
+                        console.error(err);
+                        this.errorMsg = err.message;
+                        this.loading = false;
+                    }
+                },
+
+                async submitPin() {
+                    if(this.pinInput.length !== 6) return;
+                    this.loading = true;
+                    try {
+                        const res = await fetch('/api/auth/verify-pin', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ temp_id: this.tempUserId, pin: this.pinInput })
+                        });
+                        const data = await res.json();
+                        if(!res.ok) throw new Error(data.error || 'PIN Salah');
+                        
+                        this.processSuccess(data);
+                    } catch (err) {
+                        alert(err.message);
+                        this.pinInput = '';
+                        this.loading = false;
+                    }
+                },
+
+                processSuccess(data) {
+                    if (data.user.role !== 'admin' && data.user.role !== 'owner') {
+                        this.errorMsg = "Akses ditolak. Anda bukan Admin.";
+                        this.loading = false;
+                        return;
+                    }
+
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('currentUser', JSON.stringify(data.user));
+                    window.location.href = '/admin/dashboard';
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
