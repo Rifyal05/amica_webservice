@@ -4,12 +4,18 @@ from flask import Blueprint, request, jsonify
 from ..models import User
 from ..database import db
 from flask_bcrypt import Bcrypt
-import jwt
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import os
 import uuid
 import secrets
-from flask_jwt_extended import jwt_required, get_jwt_identity # type: ignore
+from sqlalchemy import or_
+
+from flask_jwt_extended import (
+    jwt_required, 
+    get_jwt_identity, 
+    create_access_token, 
+    create_refresh_token
+)
 
 auth_bp = Blueprint('auth', __name__)
 bcrypt = Bcrypt()
@@ -23,6 +29,20 @@ if not firebase_admin._apps:
     except Exception:
         pass
 
+@auth_bp.route('/refresh', methods=['POST'])
+@jwt_required(refresh=True)
+def refresh():
+    try:
+        current_user_id = get_jwt_identity()
+
+        new_access_token = create_access_token(identity=current_user_id)
+        
+        return jsonify({
+            "access_token": new_access_token
+        }), 200
+    except Exception as e:
+        return jsonify({"error": "Sesi telah berakhir, silakan login ulang.", "details": str(e)}), 401
+
 @auth_bp.route('/register', methods=['POST'])
 def register():
     try:
@@ -32,6 +52,13 @@ def register():
         
         if not all(key in data for key in ['email', 'password', 'username', 'display_name']):
             return jsonify({"error": "Semua field (display_name, username, email, password) harus diisi"}), 400
+
+        password = data.get('password', '').strip()
+        if not password or len(password) < 6:
+            return jsonify({"error": "Password minimal 6 karakter dan tidak boleh kosong"}), 400
+        
+        if not data.get('username').strip() or not data.get('display_name').strip():
+            return jsonify({"error": "Username dan Display Name tidak boleh kosong"}), 400
 
         email = data.get('email').lower()
         username = data.get('username').lower()
@@ -64,49 +91,49 @@ def register():
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
-    if not data or not data.get('email') or not data.get('password'):
-        return jsonify({"error": "Email dan password harus diisi"}), 400
     
-    email = data.get('email').lower()
-    user = User.query.filter_by(email=email).first()
+    login_input = data.get('email') 
+    password = data.get('password')
+
+    if not login_input or not password:
+        return jsonify({"error": "Username/Email dan password harus diisi"}), 400
+  
+    login_input = login_input.lower()
     
-    if not user or not bcrypt.check_password_hash(user.password_hash, data.get('password')):
-        return jsonify({"error": "Email atau password salah"}), 401
+    user = User.query.filter(
+        or_(User.email == login_input, User.username == login_input)
+    ).first()
+    
+    if not user or not bcrypt.check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Username/Email atau password salah"}), 401
     
     if user.is_suspended:
-        # Cek tanggal unban
         if user.suspended_until and user.suspended_until <= datetime.now(timezone.utc):
             user.is_suspended = False
             user.suspended_until = None
             db.session.commit()
         else:
-            # Siapkan pesan error
             if user.suspended_until.year == 9999:
                 msg = "Akun ini telah dibanned secara PERMANEN."
             else:
                 until_str = user.suspended_until.strftime('%d %B %Y')
                 msg = f"Akun dibekukan hingga {until_str}."
-            
             return jsonify({'error': msg, 'status': 'suspended'}), 403
 
-    if user.security_pin_hash: # type: ignore
+    if user.security_pin_hash: 
         return jsonify({
             'status': 'pin_required', 
             'temp_id': str(user.id) 
         }), 200
 
-    secret_key = os.environ.get('SECRET_KEY')
-    if not secret_key:
-        return jsonify({"error": "Konfigurasi server bermasalah (SECRET_KEY missing)"}), 500
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
 
-    token = jwt.encode({
-        'user_id': str(user.id),
-        'exp': datetime.now(timezone.utc) + timedelta(days=30)
-    }, secret_key, algorithm="HS256")
-    
     return jsonify({
         "message": "Login successful",
-        "token": token,
+        "access_token": access_token,  
+        "refresh_token": refresh_token,
+        "token": access_token,          
         "user": {
             "id": str(user.id),
             "display_name": user.display_name,
@@ -114,11 +141,12 @@ def login():
             "avatar_url": user.avatar_url,
             "role": user.role,               
             "email": user.email,
-            "auth_provider": user.auth_provider, # PENTING
-            "google_uid": user.google_uid,       # PENTING
+            "auth_provider": user.auth_provider,
+            "google_uid": user.google_uid,
             "has_pin": bool(user.security_pin_hash)
         }
     }), 200
+
 
 @auth_bp.route('/verify-pin', methods=['POST'])
 def verify_pin():
@@ -129,23 +157,19 @@ def verify_pin():
         
         user = User.query.get(user_id)
         
-        if not user or not user.security_pin_hash: # type: ignore
+        if not user or not user.security_pin_hash:
             return jsonify({'error': 'Request tidak valid'}), 400
-            
-        # Cek PIN
-        if bcrypt.check_password_hash(user.security_pin_hash, pin): # type: ignore
-            secret_key = os.environ.get('SECRET_KEY')
-            if not secret_key:
-                return jsonify({"error": "Konfigurasi server bermasalah"}), 500
 
-            token = jwt.encode({
-                'user_id': str(user.id),
-                'exp': datetime.now(timezone.utc) + timedelta(days=30)
-            }, secret_key, algorithm="HS256")
+        if bcrypt.check_password_hash(user.security_pin_hash, pin):
+
+            access_token = create_access_token(identity=str(user.id))
+            refresh_token = create_refresh_token(identity=str(user.id))
 
             return jsonify({
                 "message": "Login verified",
-                "token": token,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token": access_token,
                 "user": {
                     "id": str(user.id),
                     "display_name": user.display_name,
@@ -153,10 +177,10 @@ def verify_pin():
                     "avatar_url": user.avatar_url,
                     "role": user.role,               
                     "email": user.email,
-                    "auth_provider": user.auth_provider, # PENTING
-                    "google_uid": user.google_uid,       # PENTING
+                    "auth_provider": user.auth_provider, 
+                    "google_uid": user.google_uid,       
                     "has_pin": bool(user.security_pin_hash)
-                    }
+                }
             }), 200
         else:
             return jsonify({'error': 'PIN Salah!'}), 400
@@ -184,7 +208,6 @@ def google_login():
         user = User.query.filter((User.google_uid == uid) | (User.email == email)).first()
 
         if user:
-            # Update data user jika ada perubahan
             updated = False
             if not user.google_uid:
                 user.google_uid = uid
@@ -196,7 +219,6 @@ def google_login():
             if updated:
                 db.session.commit()
         else:
-            # Register user baru via Google
             base_username = email.split('@')[0]
             clean_username = "".join(c for c in base_username if c.isalnum() or c == '_')[:20]
             final_username = clean_username
@@ -233,7 +255,6 @@ def google_login():
                 else:
                     until_str = user.suspended_until.strftime('%d %B %Y')
                     msg = f"Akun dibekukan hingga {until_str}."
-                
                 return jsonify({'error': msg, 'status': 'suspended'}), 403
 
         if user.security_pin_hash:
@@ -242,15 +263,14 @@ def google_login():
                 'temp_id': str(user.id) 
             }), 200
         
-        secret_key = os.environ.get('SECRET_KEY')
-        jwt_token = jwt.encode({
-            'user_id': str(user.id),
-            'exp': datetime.now(timezone.utc) + timedelta(days=30)
-        }, secret_key, algorithm="HS256") # type: ignore
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
 
         return jsonify({
             "message": "Google login successful",
-            "token": jwt_token,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token": access_token, # Fallback
             "user": {
                 "id": str(user.id),
                 "display_name": user.display_name,
@@ -258,14 +278,120 @@ def google_login():
                 "avatar_url": user.avatar_url,
                 "role": user.role,               
                 "email": user.email,
-                "auth_provider": user.auth_provider, # PENTING
-                "google_uid": user.google_uid,       # PENTING
+                "auth_provider": user.auth_provider, 
+                "google_uid": user.google_uid,       
                 "has_pin": bool(user.security_pin_hash)
-                }
+            }
         }), 200
 
     except Exception as e:
-        return jsonify({"error": "Terjadi kesalahan server", "details": str(e)}), 500    
+        return jsonify({"error": "Terjadi kesalahan server", "details": str(e)}), 500
+    
+@auth_bp.route('/user-google-login', methods=['POST'])
+def google_user_login():
+    try:    
+        data = request.get_json(force=True, silent=True)
+        if not data:
+            return jsonify({"error": "Data JSON tidak terbaca"}), 400
+            
+        id_token = data.get('id_token')
+        if not id_token:
+            return jsonify({"error": "ID Token tidak ditemukan"}), 400
+
+        try:
+            decoded_token = firebase_auth.verify_id_token(id_token)
+            google_email = decoded_token.get('email').lower()
+            google_uid = decoded_token.get('uid')
+            display_name = decoded_token.get('name', 'User')
+            avatar_url = decoded_token.get('picture')
+        except Exception as ve:
+            print(f"!!! Error Verifikasi Token: {ve}")
+            return jsonify({"error": "Token tidak valid", "details": str(ve)}), 401
+
+        user = User.query.filter_by(email=google_email).first()
+        needs_password_set = False
+
+        if not user:
+            base_username = google_email.split('@')[0][:15]
+            unique_username = f"{base_username}_{secrets.token_hex(3)}"
+
+            user = User(
+                id=uuid.uuid4(),# type: ignore
+                email=google_email,# type: ignore
+                username=unique_username,# type: ignore
+                display_name=display_name, # type: ignore
+                password_hash=None, # type: ignore
+                avatar_url=avatar_url,# type: ignore
+                auth_provider='google',# type: ignore
+                google_uid=google_uid,# type: ignore
+                role='user' # type: ignore
+            )
+            db.session.add(user)
+            db.session.commit()
+            needs_password_set = True
+        else:
+            if user.password_hash is None:
+                needs_password_set = True
+            
+            if not user.google_uid:
+                user.google_uid = google_uid
+                db.session.commit()
+
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
+
+        print("=== LOGIN BERHASIL ===")
+        return jsonify({
+            "message": "Login berhasil",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "needs_password_set": needs_password_set,
+            "user": {
+                "id": str(user.id),
+                "username": user.username,
+                "email": user.email,
+                "display_name": user.display_name,
+                "avatar_url": user.avatar_url
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Kesalahan server", "details": str(e)}), 500
+
+@auth_bp.route('/me', methods=['GET'])
+@jwt_required()
+def get_current_user_profile():
+    try:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+
+        if not user:
+            return jsonify({'error': 'User tidak ditemukan'}), 404
+
+        avatar = user.avatar_url
+        if avatar and not avatar.startswith('http'):
+            if 'static/uploads' not in avatar:
+                avatar = f"static/uploads/{avatar}"
+
+        return jsonify({
+            "success": True,
+            "user": {
+                "id": str(user.id),
+                "display_name": user.display_name,
+                "username": user.username,
+                "avatar_url": avatar,
+                "role": user.role,
+                "email": user.email,
+                "auth_provider": user.auth_provider,
+                "google_uid": user.google_uid,
+                "has_pin": bool(user.security_pin_hash)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": "Terjadi kesalahan", "details": str(e)}), 500
+
 @auth_bp.route('/logout', methods=['POST', 'GET'])
 def logout():
     return jsonify({"message": "Logout berhasil"}), 200
@@ -286,7 +412,7 @@ def update_user_pin():
     if user.security_pin_hash: # type: ignore
         if not old_pin:
             return jsonify({'error': 'Masukkan PIN lama untuk verifikasi.'}), 400
-        if not bcrypt.check_password_hash(user.security_pin_hash, old_pin): # type: ignore
+        if not bcrypt.check_password_hash(user.security_pin_hash, old_pin):# type: ignore
             return jsonify({'error': 'PIN lama salah.'}), 400
             
     user.security_pin_hash = bcrypt.generate_password_hash(new_pin).decode('utf-8') # type: ignore
@@ -308,7 +434,34 @@ def check_pin_access():
     if not user.security_pin_hash: # type: ignore
         return jsonify({'status': 'no_pin_set'}), 400
         
-    if bcrypt.check_password_hash(user.security_pin_hash, input_pin): # type: ignore
+    if bcrypt.check_password_hash(user.security_pin_hash, input_pin):# type: ignore
         return jsonify({'status': 'valid'})
     else:
         return jsonify({'status': 'invalid'}), 401
+    
+@auth_bp.route('/set-password', methods=['POST'])
+@jwt_required()
+def set_password():
+    try:
+        user_id = get_jwt_identity()
+        data = request.get_json()
+        new_password = data.get('password')
+
+        if not new_password or len(new_password) < 6:
+            return jsonify({"error": "Password minimal 6 karakter"}), 400
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"error": "User tidak ditemukan"}), 404
+
+        if user.password_hash is not None:
+             return jsonify({"error": "Password sudah diatur sebelumnya"}), 400
+
+        user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        db.session.commit()
+
+        return jsonify({"message": "Password berhasil diatur. Sekarang akun Anda aman!"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Gagal mengatur password", "details": str(e)}), 500

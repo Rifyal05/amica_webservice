@@ -25,28 +25,23 @@ models_to_download = [
 ]
 
 def download_all_models():
-    """
-    Mengunduh semua model dari Google Drive ke folder lokal yang sesuai.
-    """
     print("Memulai proses pengunduhan model AI...")
     print("=" * 40)
 
     for name, file_id, dest_path in models_to_download:
         print(f"\n-> Mengunduh: {name}")
         
-        # Buat direktori tujuan jika belum ada
         output_dir = os.path.dirname(dest_path)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
             print(f"   Direktori dibuat: {output_dir}")
 
-        # Unduh file menggunakan gdown
         try:
             gdown.download(id=file_id, output=dest_path, quiet=False)
-            print(f"   ✅ Berhasil disimpan di: {dest_path}")
+            print(f"Berhasil disimpan di: {dest_path}")
         except Exception as e:
-            print(f"   ❌ GAGAL mengunduh model. Error: {e}")
-            print(f"      Pastikan link Google Drive untuk '{name}' sudah di-set 'Anyone with the link can view'.")
+            print(f"GAGAL mengunduh model. Error: {e}")
+            print(f"Pastikan link Google Drive untuk '{name}' sudah di-set 'Anyone with the link can view'.")
 
     print("\n" + "=" * 40)
     print("Semua proses pengunduhan model selesai.")

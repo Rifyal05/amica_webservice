@@ -1,14 +1,19 @@
 from flask import Blueprint, request, jsonify
-from ..models import Feedback
+from ..models import Feedback, User 
 from ..database import db
-from ..utils.decorators import token_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.feedback_sentiment_service import feedback_analyzer
 
 feedback_bp = Blueprint('feedback', __name__)
 
 @feedback_bp.route('/', methods=['POST'])
-@token_required
-def submit_feedback(current_user):
+@jwt_required() 
+def submit_feedback(): 
+    user_id = get_jwt_identity()
+    current_user = User.query.get(user_id)
+    if not current_user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
     data = request.get_json()
     feedback_text = data.get('feedback_text', '')
     

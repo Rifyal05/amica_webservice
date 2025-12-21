@@ -32,9 +32,9 @@ def download_vocab_dependencies():
 
         try:
             gdown.download(id=file_id, output=dest_path, quiet=False)
-            print(f"   ✅ Berhasil disimpan di: {dest_path}")
+            print(f"Berhasil disimpan di: {dest_path}")
         except Exception as e:
-            print(f"   ❌ GAGAL mengunduh file. Periksa ID Google Drive Anda. Error: {e}")
+            print(f"GAGAL mengunduh file. Periksa ID Google Drive Anda. Error: {e}")
 
     print("\n" + "=" * 50)
     print("Semua proses pengunduhan dependensi selesai.")

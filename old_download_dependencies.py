@@ -28,9 +28,9 @@ def download_all_dependencies():
 
         try:
             gdown.download(id=file_id, output=dest_path, quiet=False)
-            print(f"   ✅ Berhasil disimpan di: {dest_path}")
+            print(f"Berhasil disimpan di: {dest_path}")
         except Exception as e:
-            print(f"   ❌ GAGAL mengunduh. Error: {e}")
+            print(f"GAGAL mengunduh. Error: {e}")
 
     print("\n" + "=" * 40)
     print("Semua proses pengunduhan dependensi selesai.")

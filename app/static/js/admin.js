@@ -59,7 +59,7 @@ document.addEventListener('alpine:init', () => {
             show: false,
             title: '',
             message: '',
-            type: 'primary', // 'primary' atau 'danger'
+            type: 'primary', 
             confirmText: 'Ya',
             callback: null
         },
@@ -84,7 +84,7 @@ document.addEventListener('alpine:init', () => {
             { label: 'Tahun Ini', val: '1y' }, { label: '5 Tahun', val: '5y' }, { label: '10 Tahun', val: '10y' }, { label: 'Semua', val: 'all' }
         ],
 
-        // ================= INIT & UTILS =================
+        // INIT & UTILS
         initApp() {
             if (!this.token) window.location.href = '/admin/login';
             if (this.isDark) document.documentElement.classList.add('dark');
@@ -110,10 +110,8 @@ document.addEventListener('alpine:init', () => {
             const headers = { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json', ...opts.headers };
             const res = await fetch(url, { ...opts, headers });
 
-            // UPDATE: Menangani Banned User (403)
             if (res.status === 403) {
                 const data = await res.json().catch(() => ({}));
-                // Tetap pakai alert agar user membaca pesan sebelum logout
                 alert(data.message || data.error || "Akses ditolak atau Akun Anda telah disuspend.");
                 this.logout();
                 return null;
@@ -135,29 +133,21 @@ document.addEventListener('alpine:init', () => {
         getAvatarUrl(path) {
             if (!path) return '';
 
-            // Konversi ke string dan hapus spasi kiri-kanan
             const safePath = String(path).trim();
 
-            // Cek apakah URL eksternal (Google, dll) atau Base64
             if (safePath.startsWith('http') || safePath.startsWith('data:')) {
                 return safePath;
             }
 
-            // Jika bukan, berarti file lokal
             return '/static/uploads/' + safePath;
         },
 
         showToast(title, message, type = 'success') {
             const id = Date.now();
-            // Push ke array toasts
             this.toasts.push({ id, title, message, type, show: true });
-
-            // Hapus otomatis setelah 3 detik
             setTimeout(() => {
                 const index = this.toasts.findIndex(t => t.id === id);
                 if (index > -1) this.toasts[index].show = false;
-
-                // Tunggu animasi CSS selesai baru hapus dari array
                 setTimeout(() => {
                     this.toasts = this.toasts.filter(t => t.id !== id);
                 }, 300);
@@ -182,7 +172,6 @@ document.addEventListener('alpine:init', () => {
             this.confirmModal.show = false;
         },
 
-        // Getter untuk memisahkan Owner dan Admin
         get ownersList() { return this.keyPeople.filter(u => u.role === 'owner'); },
         get adminsList() { return this.keyPeople.filter(u => u.role === 'admin'); },
 
@@ -207,7 +196,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async searchSuggestions(query, type) {
-            this.activeSearch = type; // 'manage' atau 'suspend'
+            this.activeSearch = type;
 
             if (query.length < 2) {
                 this.suggestions = [];
@@ -233,9 +222,6 @@ document.addEventListener('alpine:init', () => {
             this.suggestions = [];
             this.activeSearch = null;
         },
-        // ---------------------------------------------
-
-        // 4. Quick Change Role
         async quickChangeRole() {
             if (!this.manageForm.email) return this.showToast('Validasi', "Masukkan email user", 'error');
 
@@ -244,8 +230,6 @@ document.addEventListener('alpine:init', () => {
 
             if (!targetUser) return this.showToast('Tidak Ditemukan', "User tidak ditemukan.", 'error');
             if (targetUser.id === this.user.id) return this.showToast('Akses Ditolak', "Tidak bisa mengubah role diri sendiri.", 'error');
-
-            // PAKAI MODAL BARU
             this.askConfirm(
                 'Ubah Role',
                 `Yakin ingin mengubah ${targetUser.username} menjadi ${this.manageForm.role.toUpperCase()}?`,
@@ -267,16 +251,12 @@ document.addEventListener('alpine:init', () => {
 
 
         get isProfileChanged() {
-            // Cek apakah ada file avatar baru yg dipilih
             if (this.formProfile.avatarFile) return true;
-
-            // Cek apakah teks berbeda dengan data user asli
             return this.formProfile.display_name !== this.user.display_name ||
                 this.formProfile.username !== this.user.username ||
                 this.formProfile.email !== this.user.email;
         },
 
-        // 5. Quick Suspend
         async quickSuspend() {
             if (!this.suspendForm.email) return alert("Masukkan email user");
 
@@ -294,7 +274,6 @@ document.addEventListener('alpine:init', () => {
             this.suspendForm.email = '';
         },
 
-        // 6. Action Tombol Tabel
         async promoteUser(u) {
             this.askConfirm(
                 'Promote User',
@@ -316,7 +295,6 @@ document.addEventListener('alpine:init', () => {
         },
 
         async deleteUserById(u) {
-            // Delete butuh konfirmasi ganda (Prompt tetap pakai prompt browser untuk input teks)
             const confirmName = prompt(`KETIK 'CONFIRM' untuk menghapus user ${u.username} secara permanen.`);
             if (confirmName !== 'CONFIRM') return this.showToast('Batal', "Penghapusan dibatalkan.", 'error');
 
@@ -350,12 +328,8 @@ document.addEventListener('alpine:init', () => {
                     if (res?.message) {
                         this.showToast('Dipulihkan', res.message);
                         this.activeDropdown = null;
-
-                        // REFRESH SEMUA TABEL
                         this.fetchKeyPeople();
                         this.fetchRegularUsers(this.pagination.current_page);
-
-                        // Fungsi ini aman dipanggil meski ada di file lain
                         this.fetchBannedUsers(1);
                     } else if (res?.error) {
                         this.showToast('Gagal', res.error, 'error');
@@ -381,18 +355,14 @@ document.addEventListener('alpine:init', () => {
         },
 
         async connectGoogleAccount() {
-            // Pastikan Firebase sudah dimuat di window (dari login.html atau base.html)
             if (!window.firebaseAuth) {
                 return this.showToast('Error', "Layanan Google belum siap. Refresh halaman.", 'error');
             }
 
             try {
-                // 1. Popup Google Login
                 const result = await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
                 const idToken = await result.user.getIdToken();
-
-                // 2. Kirim Token ke Backend untuk Link Account
-                const res = await fetch('/admin/link-google', { // Endpoint baru (lihat langkah 4)
+                const res = await fetch('/admin/link-google', {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Bearer ' + this.token,
@@ -405,9 +375,8 @@ document.addEventListener('alpine:init', () => {
 
                 if (res.ok) {
                     this.showToast('Sukses', 'Akun Google berhasil dihubungkan!');
-                    // Update state user lokal
                     this.user.google_uid = data.google_uid;
-                    this.user.auth_provider = 'google'; // Atau hybrid
+                    this.user.auth_provider = 'google';
                     localStorage.setItem('currentUser', JSON.stringify(this.user));
                 } else {
                     this.showToast('Gagal', data.message || "Gagal menghubungkan akun.", 'error');
@@ -429,14 +398,11 @@ document.addEventListener('alpine:init', () => {
 
         getArticleImg(path) {
             if (!path) return 'https://via.placeholder.com/150?text=No+Image';
-            // Kalau diawali http/https, berarti link eksternal. Langsung return.
             if (path.startsWith('http')) return path;
-            // Kalau bukan, berarti file lokal
             return `/static/uploads/articles/${path}`;
         },
 
         openArticleModal() {
-            // 1. Reset Form di MEMORI saja (Jangan panggil clearDraft karena itu hapus storage)
             this.articleForm = {
                 id: null,
                 title: '', category: '', content: '', tags: '',
@@ -445,14 +411,11 @@ document.addEventListener('alpine:init', () => {
                 is_featured: false
             };
             this.hasDraft = false;
-
-            // 2. Cek apakah ada Draft tersimpan di LocalStorage?
             const draft = localStorage.getItem('article_draft');
 
             if (draft) {
                 try {
                     const parsed = JSON.parse(draft);
-                    // Gabungkan data draft ke dalam form kosong tadi
                     this.articleForm = { ...this.articleForm, ...parsed };
                     this.hasDraft = true;
                 } catch (e) {
@@ -460,15 +423,12 @@ document.addEventListener('alpine:init', () => {
                 }
             }
 
-            // 3. Buka Modal
             this.isArticleModalOpen = true;
 
             this.$nextTick(() => {
                 this.$watch('articleForm', (val) => {
-                    // Cek: Jangan simpan jika sedang mode EDIT (punya ID)
                     if (val.id) return;
 
-                    // Simpan data text saja ke browser
                     const toSave = {
                         title: val.title,
                         category: val.category,
@@ -507,28 +467,16 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // LOGIKA TAG OTOMATIS: Spasi jadi Underscore, Koma jadi pemisah
         formatTagsInput() {
             let val = this.articleForm.tags;
-
-            // 1. Hapus karakter ilegal (selain huruf, angka, underscore, koma, spasi)
             val = val.replace(/[^a-zA-Z0-9_, ]/g, '');
-
-            // 2. Jika ada koma diikuti spasi (", "), hapus spasinya segera
             val = val.replace(/, +/g, ',');
-
-            // 3. Jika ada spasi di tengah kata (misal: "aku ingin"), ubah jadi "aku_ingin"
-            //    Kita lakukan ini hanya jika TIDAK sedang mengetik koma
             val = val.replace(/ +/g, '_');
-
             this.articleForm.tags = val;
         },
 
-        // SUBMIT DENGAN CEK ERROR 404
         editArticle(art) {
-            this.clearDraft(false); // Bersihkan sisa draft
-
-            // Isi form dengan data artikel yg mau diedit
+            this.clearDraft(false); 
             this.articleForm = {
                 id: art.id,
                 title: art.title,
@@ -537,9 +485,9 @@ document.addEventListener('alpine:init', () => {
                 tags: Array.isArray(art.tags) ? art.tags.join(',') : (art.tags || ''),
                 source_name: art.source_name || '',
                 source_url: art.source_url || '',
-                image: null, // Reset file upload
+                image: null, 
                 image_url_manual: '',
-                preview: this.getArticleImg(art.image_url), // Tampilkan gambar lama
+                preview: this.getArticleImg(art.image_url),
                 is_featured: art.is_featured
             };
 
@@ -558,22 +506,20 @@ document.addEventListener('alpine:init', () => {
             formData.append('source_url', this.articleForm.source_url);
             formData.append('is_featured', this.articleForm.is_featured);
 
-            // Handle Image
             if (this.articleForm.image) {
                 formData.append('image', this.articleForm.image);
             } else if (this.articleForm.image_url_manual) {
                 formData.append('image_url_manual', this.articleForm.image_url_manual);
             }
 
-            // TENTUKAN URL: CREATE ATAU UPDATE?
             let url = '/admin/articles/';
             if (this.articleForm.id) {
-                url = `/admin/articles/${this.articleForm.id}`; // Mode Edit (URL + ID)
+                url = `/admin/articles/${this.articleForm.id}`; 
             }
 
             try {
                 const res = await fetch(url, {
-                    method: 'POST', // Flask PUT ribet dengan FormData, pakai POST aja
+                    method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + this.token },
                     body: formData
                 });
@@ -601,7 +547,6 @@ document.addEventListener('alpine:init', () => {
                 this.fetchArticles(this.articlePage);
             }
         },
-        // ================= FEEDBACK LOGIC =================
         setFeedbackRange(range) { this.feedbackRange = range; this.fetchFeedback(); },
         async fetchFeedback() {
             const url = `/admin/feedbacks?range=${this.feedbackRange}`;
@@ -630,7 +575,7 @@ document.addEventListener('alpine:init', () => {
             });
         },
 
-        // ================= DASHBOARD CHARTS =================
+        // DASHBOARD CHARTS
         setStatsRange(range) { this.currentStatsRange = range; this.fetchStats(); },
         async fetchStats() {
             const tzOffset = new Date().getTimezoneOffset();
@@ -651,7 +596,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // ================= REPORTS =================
+        // REPORTS
         async fetchReports() { this.reports = await this.authFetch('/admin/reports') || []; },
         get filteredReports() { return this.reportTab === 'All' ? this.reports : this.reports.filter(r => r.target_type === this.reportTab); },
         openSuspendModal(r) { this.selectedReport = r; this.suspendTargetId = r.target_user_id; this.suspendModalOpen = true; },
@@ -667,7 +612,7 @@ document.addEventListener('alpine:init', () => {
                 }
             );
         },
-        // ================= SETTINGS =================
+        // SETTINGS
         handleFileSelect(e) {
             if (e.target.files.length) {
                 const file = e.target.files[0];
@@ -708,7 +653,6 @@ document.addEventListener('alpine:init', () => {
 
 
         async changePassword() {
-            // 1. Validasi Frontend
             if (!this.newPassword || this.newPassword.length < 6) {
                 return this.showToast('Perhatian', "Password baru minimal 6 karakter!", 'error');
             }
@@ -726,13 +670,13 @@ document.addEventListener('alpine:init', () => {
             });
 
             if (res?.message) {
-                this.showToast('Berhasil', res.message); // TOAST
+                this.showToast('Berhasil', res.message);
                 this.newPassword = '';
                 this.oldPassword = '';
                 this.user.auth_provider = 'email';
                 localStorage.setItem('currentUser', JSON.stringify(this.user));
             } else if (res?.error) {
-                this.showToast('Gagal', res.error, 'error'); // TOAST
+                this.showToast('Gagal', res.error, 'error');
             }
         },
 
@@ -746,7 +690,7 @@ document.addEventListener('alpine:init', () => {
             });
 
             if (res?.message) {
-                this.showToast('Berhasil', res.message); // TOAST
+                this.showToast('Berhasil', res.message);
                 this.pinForm.old = '';
                 this.pinForm.new = '';
             } else if (res?.error) {
@@ -763,7 +707,7 @@ document.addEventListener('alpine:init', () => {
             const res = await this.authFetch('/admin/delete-account', { method: 'DELETE' });
 
             if (res?.message) {
-                alert(res.message); // Ini boleh alert krn mau logout
+                alert(res.message);
                 this.logout();
             } else if (res?.error) {
                 this.showToast('Gagal', res.error, 'error');

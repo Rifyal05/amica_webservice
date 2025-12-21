@@ -12,17 +12,17 @@ from firebase_admin import auth as firebase_auth
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
-# === ANCHOR: LOGIN PAGE ===
+# ANCHOR: LOGIN PAGE
 @admin_bp.route('/login')
 def login_page():
     return render_template('admin/login.html')
 
-# === ANCHOR: DASHBOARD PAGE ===
+# ANCHOR: DASHBOARD PAGE
 @admin_bp.route('/dashboard')
 def dashboard_page():
     return render_template('admin/base.html')
 
-# === ANCHOR: GET STATS ===
+# ANCHOR : GET STATS
 @admin_bp.route('/stats', methods=['GET'])
 @admin_required
 def get_stats(current_user):
@@ -139,7 +139,7 @@ def get_stats(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: GET USERS LIST (DEPRECATED BUT KEPT) ===
+#[ANCHOR]: GET USERS LIST
 @admin_bp.route('/users-list', methods=['GET'])
 @admin_required
 def get_users_list(current_user):
@@ -161,7 +161,7 @@ def get_users_list(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: CHANGE ROLE ===
+#[ANCHOR]: CHANGE ROLE
 @admin_bp.route('/users/change-role', methods=['POST'])
 @admin_required
 def change_role(current_user):
@@ -182,14 +182,11 @@ def change_role(current_user):
         if target_user.role == 'admin' and current_user.role != 'owner':
             return jsonify({'error': 'Hanya Owner yang berhak menurunkan jabatan Admin.'}), 403
 
-        # Capture old state for log
-        old_role = target_user.role
 
-        # Change role
+        old_role = target_user.role
         target_user.role = new_role
         db.session.commit()
         
-        # --- TRIGGER LOG ---
         record_log(
             actor_id=current_user.id,
             target_id=target_user.id,
@@ -206,7 +203,7 @@ def change_role(current_user):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
     
-# === ANCHOR: SUSPEND USER ===
+# ANCHOR: SUSPEND USER
 @admin_bp.route('/users/suspend', methods=['POST'])
 @admin_required
 def suspend_user(current_user):
@@ -224,7 +221,6 @@ def suspend_user(current_user):
         if user_to_suspend.role == 'admin' and current_user.role != 'owner':
             return jsonify({'message': 'Hanya Owner yang bisa men-suspend Admin.'}), 403
 
-        # Capture old state
         old_status = user_to_suspend.is_suspended
         old_until = user_to_suspend.suspended_until.isoformat() if user_to_suspend.suspended_until else None
 
@@ -239,7 +235,6 @@ def suspend_user(current_user):
 
         db.session.commit()
 
-        # --- TRIGGER LOG ---
         record_log(
             actor_id=current_user.id,
             target_id=user_to_suspend.id,
@@ -255,7 +250,7 @@ def suspend_user(current_user):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: UNSUSPEND USER ===
+# ANCHOR: UNSUSPEND USER
 @admin_bp.route('/users/unsuspend', methods=['POST'])
 @admin_required
 def unsuspend_user(current_user):
@@ -265,14 +260,12 @@ def unsuspend_user(current_user):
         user = User.query.get(user_id)
         if not user: return jsonify({'message': 'User tidak ditemukan'}), 404
 
-        # Capture old state
         old_until = user.suspended_until.isoformat() if user.suspended_until else None
 
         user.is_suspended = False
         user.suspended_until = None
         db.session.commit()
 
-        # --- TRIGGER LOG ---
         record_log(
             actor_id=current_user.id,
             target_id=user.id,
@@ -288,7 +281,7 @@ def unsuspend_user(current_user):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: DELETE USER (BY ADMIN) ===
+# ANCHOR: DELETE USER (BY ADMIN)
 @admin_bp.route('/users/<user_id>', methods=['DELETE'])
 @admin_required
 def delete_user_by_admin(current_user, user_id):
@@ -302,7 +295,6 @@ def delete_user_by_admin(current_user, user_id):
         if user_to_delete.role == 'admin' and current_user.role != 'owner':
             return jsonify({'error': 'Hanya Owner yang bisa menghapus akun Admin.'}), 403
 
-        # Capture user info before delete (untuk history log)
         user_snapshot = {
             'username': user_to_delete.username,
             'email': user_to_delete.email,
@@ -313,10 +305,9 @@ def delete_user_by_admin(current_user, user_id):
         db.session.delete(user_to_delete)
         db.session.commit()
 
-        # --- TRIGGER LOG ---
         record_log(
             actor_id=current_user.id,
-            target_id=None, # Target ID null karena user sudah dihapus
+            target_id=None, 
             target_type='User',
             action='DELETE_USER',
             old_val=user_snapshot,
@@ -329,7 +320,7 @@ def delete_user_by_admin(current_user, user_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: GET REPORTS ===
+# ANCHOR: GET REPORTS
 @admin_bp.route('/reports', methods=['GET'])
 @admin_required
 def get_reports(current_user):
@@ -375,7 +366,6 @@ def get_reports(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: RESOLVE REPORT ===
 @admin_bp.route('/reports/<int:report_id>/resolve', methods=['POST'])
 @admin_required
 def resolve_report(current_user, report_id):
@@ -390,7 +380,6 @@ def resolve_report(current_user, report_id):
         report.status = new_status
         db.session.commit()
 
-        # --- TRIGGER LOG ---
         record_log(
             actor_id=current_user.id,
             target_id=str(report.id),
@@ -405,7 +394,7 @@ def resolve_report(current_user, report_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: GET FEEDBACKS ===
+# ANCHOR: GET FEEDBACKS
 @admin_bp.route('/feedbacks', methods=['GET'])
 @admin_required
 def get_feedbacks(current_user):
@@ -447,7 +436,7 @@ def get_feedbacks(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: UPDATE PROFILE ===
+# ANCHOR: UPDATE PROFILE
 @admin_bp.route('/update-profile', methods=['POST'])
 @admin_required
 def update_profile(current_user):
@@ -497,7 +486,7 @@ def update_profile(current_user):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: CHANGE PASSWORD ===
+# ANCHOR: CHANGE PASSWORD
 @admin_bp.route('/change-password', methods=['POST'])
 @admin_required
 def change_password(current_user):
@@ -527,7 +516,7 @@ def change_password(current_user):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
     
-# === ANCHOR: UPDATE PIN ===
+# ANCHOR: UPDATE PIN
 @admin_bp.route('/update-pin', methods=['POST'])
 @admin_required
 def update_pin(current_user):
@@ -546,7 +535,7 @@ def update_pin(current_user):
     db.session.commit()
     return jsonify({'message': 'PIN Keamanan berhasil diperbarui!'})
 
-# === ANCHOR: DELETE ACCOUNT (SELF) ===
+# ANCHOR: DELETE ACCOUNT(SELF)
 @admin_bp.route('/delete-account', methods=['DELETE'])
 @admin_required
 def delete_account(current_user):
@@ -560,7 +549,7 @@ def delete_account(current_user):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
     
-# === ANCHOR: KEY PEOPLE ===
+# ANCHOR: KEY PEOPLE
 @admin_bp.route('/users/key-people', methods=['GET'])
 @admin_required
 def get_key_people(current_user):
@@ -583,7 +572,7 @@ def get_key_people(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# === ANCHOR: REGULAR USERS ===
+# ANCHOR: REGULAR USERS
 @admin_bp.route('/users/regular', methods=['GET'])
 @admin_required
 def get_regular_users(current_user):
@@ -625,7 +614,7 @@ def get_regular_users(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-# === ANCHOR: AUTOCOMPLETE ===
+# ANCHOR: AUTOCOMPLETE
 @admin_bp.route('/users/autocomplete', methods=['GET'])
 @admin_required
 def autocomplete_users(current_user):
@@ -651,7 +640,7 @@ def autocomplete_users(current_user):
     except Exception as e:
         return jsonify([])
     
-# === ANCHOR: LINK GOOGLE ===
+# ANCHOR: LINK GOOGLE
 @admin_bp.route('/link-google', methods=['POST'])
 @admin_required
 def link_google_account(current_user):
@@ -683,7 +672,7 @@ def link_google_account(current_user):
     except Exception as e:
         return jsonify({'message': 'Token tidak valid atau expired.', 'error': str(e)}), 400
     
-# === ANCHOR: BANNED USERS ===
+# ANCHOR: BANNED USERS
 @admin_bp.route('/users/banned', methods=['GET'])
 @admin_required
 def get_banned_users(current_user):
@@ -733,11 +722,11 @@ def get_banned_users(current_user):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-# === ANCHOR: ACTIVITY LOGS ===
+# ANCHOR: ACTIVITY LOGS
 @admin_bp.route('/activity-logs', methods=['GET'])
 @admin_required
 def get_activity_logs(current_user):
-    time_filter = request.args.get('filter', '14d') # Default 14 hari
+    time_filter = request.args.get('filter', '14d')
     search = request.args.get('q', '')
 
     query = AuditLog.query
@@ -751,11 +740,10 @@ def get_activity_logs(current_user):
     elif time_filter == '7d':
         start_date = now - timedelta(days=7)
     else:
-        start_date = now - timedelta(days=14) # Max 14 hari
+        start_date = now - timedelta(days=14)
     
     query = query.filter(AuditLog.created_at >= start_date)
 
-    # Filter Search
     if search:
         search_term = f"%{search}%"
         query = query.filter(AuditLog.description.ilike(search_term))
@@ -764,7 +752,6 @@ def get_activity_logs(current_user):
     
     data = []
     for log in logs:
-        # Ambil data actor
         actor = User.query.get(log.actor_id)
         actor_name = actor.username if actor else "Unknown"
         actor_avatar = actor.avatar_url if actor else ""
@@ -776,12 +763,11 @@ def get_activity_logs(current_user):
             'action': log.action,
             'description': log.description,
             'timestamp': log.created_at.strftime('%d %b %H:%M'),
-            'can_revert': log.old_value is not None # Cek apakah bisa direvert
+            'can_revert': log.old_value is not None
         })
 
     return jsonify(data)
 
-# === ANCHOR: REVERT ACTIVITY (OWNER ONLY) ===
 @admin_bp.route('/activity-logs/<int:log_id>/revert', methods=['POST'])
 @admin_required
 def revert_activity(current_user, log_id):
@@ -797,7 +783,6 @@ def revert_activity(current_user, log_id):
         if not target_user:
             return jsonify({'error': 'User target sudah dihapus permanen, tidak bisa revert.'}), 404
 
-        # LOGIKA REVERT
         if log.action == 'CHANGE_ROLE':
             target_user.role = log.old_value.get('role')
         
@@ -811,7 +796,6 @@ def revert_activity(current_user, log_id):
 
         db.session.commit()
         
-        # Catat bahwa ini hasil revert
         record_log(current_user.id, target_user.id, 'User', 'REVERT', None, None, f"Owner membatalkan aksi: {log.description}")
 
         return jsonify({'message': 'Perubahan berhasil dibatalkan (Reverted).'})

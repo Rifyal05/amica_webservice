@@ -44,16 +44,15 @@ def admin_required(f):
 
         try:
             secret = os.environ.get('SECRET_KEY')
-            data = jwt.decode(token, secret, algorithms=["HS256"])
+            data = jwt.decode(token, secret, algorithms=["HS256"]) # type: ignore
             current_user = User.query.get(data['user_id'])
             
             if not current_user:
                 return jsonify({'message': 'User not found!'}), 401
             
-            # --- CEK SUSPEND (PENAMBAHAN BARU) ---
+    
             if current_user.is_suspended:
                 return jsonify({'message': 'Akun Anda telah dibekukan. Akses ditolak.'}), 403
-            # -------------------------------------
 
             if current_user.role not in ['admin', 'owner']:
                 return jsonify({'message': 'Access denied.'}), 403

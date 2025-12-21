@@ -1,5 +1,5 @@
-from ..database import db       # Pastikan import db
-from ..models import AuditLog   # Pastikan import model AuditLog
+from ..database import db      
+from ..models import AuditLog   
 
 def record_log(actor_id, target_id, target_type, action, old_val, new_val, description):
     try:
@@ -13,8 +13,6 @@ def record_log(actor_id, target_id, target_type, action, old_val, new_val, descr
             description=description # type: ignore
         )
         db.session.add(log)
-        # Note: Biasanya commit dilakukan di route utama, 
-        # tapi kalau mau force commit di sini juga boleh:
         db.session.commit() 
     except Exception as e:
         print(f"Gagal mencatat log: {e}")

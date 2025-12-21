@@ -1,14 +1,14 @@
 from flask import Blueprint, request, jsonify, current_app
-from ..models import Post, User, PostLike, Connection, db
-from ..utils.decorators import token_required
+from ..models import Post, User, PostLike, Connection, SavedPost, db
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.post_classification_service import post_classifier 
 from ..services.image_moderation_service import image_moderator
+from ..services.post_services import toggle_save_post 
 import uuid
 import os
 import jwt
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone 
-
 
 post_bp = Blueprint('post', __name__)
 
@@ -19,8 +19,12 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @post_bp.route('/', methods=['POST'])
-@token_required
-def create_post(current_user):
+@jwt_required()
+def create_post(): 
+    user_id = get_jwt_identity()
+    current_user = User.query.get(user_id)
+    if not current_user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
     
     caption = request.form.get('caption', '').strip()
     tags = request.form.getlist('tags')
@@ -88,58 +92,78 @@ def create_post(current_user):
     }), 201
 
 @post_bp.route('/', methods=['GET'])
+@jwt_required(optional=True) 
 def get_posts():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
+    target_user_id = request.args.get('user_id')
+    filter_type = request.args.get('filter', 'latest') 
     
-    current_user_id = None
-    token = None
-    
-    # 1. SOFT AUTHENTICATION
-    if 'Authorization' in request.headers:
-        auth_header = request.headers['Authorization']
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(" ")[1]
-    
-    if token:
+    current_user_id = get_jwt_identity() 
+
+    query = db.session.query(Post, User)\
+        .join(User, Post.user_id == User.id)\
+        .filter(Post.moderation_status == 'approved')
+
+    if target_user_id:
         try:
-            data = jwt.decode(token, os.environ.get('SECRET_KEY'), algorithms=["HS256"])
-            current_user_id = data.get('user_id')
-        except:
-            current_user_id = None
-
-    # 2. QUERY DATABASE
-    posts_query = db.session.query(
-        Post.id, Post.caption, Post.tags, Post.image_url, Post.created_at, Post.likes_count, Post.comments_count,
-        User.id.label('user_id'), User.display_name, User.username, User.avatar_url
-    ).join(User, Post.user_id == User.id).filter(Post.moderation_status == 'approved').order_by(Post.created_at.desc())
-
-    paginated_posts = posts_query.paginate(page=page, per_page=per_page, error_out=False) # type: ignore
+            uuid_obj = uuid.UUID(target_user_id)
+            query = query.filter(Post.user_id == uuid_obj)
+        except ValueError:
+            return jsonify({
+                "posts": [],
+                "pagination": {"has_next": False}
+            }), 200
+    else:
+        if filter_type == 'following':
+            if current_user_id:
+                query = query.join(Connection, Connection.following_id == Post.user_id)\
+                             .filter(Connection.follower_id == current_user_id)
+            else:
+                return jsonify({
+                    "posts": [],
+                    "pagination": {"has_next": False}
+                }), 200
+            
+    query = query.order_by(Post.created_at.desc())
+    paginated_posts = query.paginate(page=page, per_page=per_page, error_out=False) # type: ignore
     
     results = []
-    for post in paginated_posts.items:
-        # 3. CEK LIKE & FOLLOW
+    
+    for post, post_author in paginated_posts.items:
         is_liked = False
         is_following = False
+        is_saved = False
         
         if current_user_id:
-            like_exists = PostLike.query.filter_by(
-                user_id=current_user_id, 
-                post_id=post.id
-            ).first()
-            if like_exists:
+            # Cek Like
+            if PostLike.query.filter_by(user_id=current_user_id, post_id=post.id).first():
                 is_liked = True
 
-            if str(post.user_id) != str(current_user_id):
+            # Cek Save
+            if SavedPost.query.filter_by(user_id=current_user_id, post_id=post.id).first():
+                is_saved = True
+
+            # Cek Follow
+            if str(post_author.id) != str(current_user_id):
                 follow_exists = Connection.query.filter_by(
                     follower_id=current_user_id,
-                    following_id=post.user_id
+                    following_id=post_author.id
                 ).first()
                 if follow_exists:
                     is_following = True
         
+        image_url = post.image_url
+        if image_url and not image_url.startswith('http'):
+            if 'static/uploads' not in image_url:
+                image_url = f"static/uploads/{image_url}"
+
+        avatar_url = post_author.avatar_url
+        if avatar_url and not avatar_url.startswith('http'):
+            if 'static/uploads' not in avatar_url:
+                avatar_url = f"static/uploads/{avatar_url}"
+
         dt = post.created_at
-        
         if dt is not None:
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
@@ -147,41 +171,49 @@ def get_posts():
                 dt = dt.astimezone(timezone.utc)
             created_at_str = dt.isoformat().replace('+00:00', 'Z')
         else:
-            created_at_str = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-
+            created_at_str = datetime.now(timezone.utc).isoformat()
 
         results.append({
             "id": str(post.id),
             "caption": post.caption,
-            "tags": post.tags,
-            "image_url": post.image_url,
+            "tags": post.tags if post.tags else [],
+            "image_url": image_url, 
             "created_at": created_at_str,
             "likes_count": post.likes_count,
             "comments_count": post.comments_count,
             "is_liked": is_liked,
+            "is_saved": is_saved,
             "author": {
-                "id": str(post.user_id),
-                "display_name": post.display_name,
-                "username": post.username,
-                "avatar_url": post.avatar_url,
+                "id": str(post_author.id),
+                "display_name": post_author.display_name,
+                "username": post_author.username,
+                "avatar_url": avatar_url,
                 "is_following": is_following
             }
         })
     
     return jsonify({
         "posts": results,
-        "total_pages": paginated_posts.pages,
-        "current_page": paginated_posts.page,
-        "has_next": paginated_posts.has_next
+        "pagination": { 
+            "total_pages": paginated_posts.pages,
+            "current_page": paginated_posts.page,
+            "has_next": paginated_posts.has_next
+        }
     }), 200
+
 @post_bp.route('/<uuid:post_id>/like', methods=['POST'])
-@token_required
-def toggle_like(current_user, post_id):
+@jwt_required()
+def toggle_like(post_id): 
+    user_id = get_jwt_identity()
+    current_user = User.query.get(user_id)
+    if not current_user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
     post = Post.query.get(post_id)
     if not post:
         return jsonify({"error": "Post not found"}), 404
 
-    like = PostLike.query.filter_by(user_id=current_user.id, post_id=post_id).first()
+    like = PostLike.query.filter_by(user_id=current_user.id, post_id=post.id).first()
 
     try:
         if like:
@@ -208,8 +240,13 @@ def toggle_like(current_user, post_id):
     
 
 @post_bp.route('/<uuid:post_id>', methods=['DELETE'])
-@token_required
-def delete_post(current_user, post_id):
+@jwt_required()
+def delete_post(post_id):
+    user_id = get_jwt_identity()
+    current_user = User.query.get(user_id)
+    if not current_user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
     post = Post.query.get(post_id)
     
     if not post:
@@ -224,3 +261,16 @@ def delete_post(current_user, post_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "Failed to delete post", "details": str(e)}), 500
+    
+
+@post_bp.route('/<uuid:post_id>/save', methods=['POST'])
+@jwt_required() 
+def save_post(post_id): 
+    user_id = get_jwt_identity()
+    current_user = User.query.get(user_id)
+    if not current_user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
+    is_saved = toggle_save_post(current_user.id, post_id)
+    message = "Postingan disimpan" if is_saved else "Postingan dihapus dari simpanan"
+    return jsonify({"success": True, "is_saved": is_saved, "message": message}), 200

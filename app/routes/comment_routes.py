@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
-from ..models import Comment, Post
+from ..models import Comment, Post, User 
 from ..database import db
-from ..utils.decorators import token_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.post_classification_service import post_classifier
 import uuid
 
@@ -10,8 +10,13 @@ comment_bp = Blueprint('comment', __name__)
 ALLOWED_COMMENT_CATEGORIES = {'Bersih'}
 
 @comment_bp.route('/<uuid:post_id>/comments', methods=['POST'])
-@token_required
-def create_comment(current_user, post_id):
+@jwt_required() 
+def create_comment(post_id): 
+    user_id = get_jwt_identity()
+    current_user = User.query.get(user_id)
+    if not current_user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
     data = request.get_json()
     text = data.get('text', '').strip()
     parent_comment_id = data.get('parent_comment_id')
@@ -65,3 +70,45 @@ def create_comment(current_user, post_id):
         "comment_id": str(new_comment.id),
         "status": moderation_status
     }), 201
+
+@comment_bp.route('/<uuid:post_id>/comments', methods=['GET'])
+def get_comments(post_id):
+    root_comments = Comment.query.filter_by(
+        post_id=post_id, 
+        parent_comment_id=None,
+        moderation_status='approved'
+    ).order_by(Comment.created_at.desc()).all()
+
+    results = []
+    for comment in root_comments:
+        results.append(serialize_comment(comment))
+
+    return jsonify(results), 200
+
+def serialize_comment(comment):
+    """Helper rekursif untuk menyusun komentar dan balasannya"""
+    replies = []
+    if comment.replies:
+        approved_replies = [r for r in comment.replies if r.moderation_status == 'approved']
+        approved_replies.sort(key=lambda x: x.created_at)
+        for reply in approved_replies:
+            replies.append(serialize_comment(reply))
+            
+    avatar = comment.user.avatar_url
+    if avatar and not avatar.startswith('http'):
+        if not 'static/uploads' in avatar:
+            avatar = f"static/uploads/{avatar}"
+
+    return {
+        'id': str(comment.id),
+        'text': comment.text,
+        'created_at': comment.created_at.isoformat(),
+        'parent_comment_id': str(comment.parent_comment_id) if comment.parent_comment_id else None,
+        'user': {
+            'id': str(comment.user.id),
+            'username': comment.user.username,
+            'display_name': comment.user.display_name,
+            'avatar_url': avatar
+        },
+        'replies': replies
+    }

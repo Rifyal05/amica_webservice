@@ -20,15 +20,14 @@ const activityLogLogic = () => ({
                 
                 if (res?.message) {
                     this.showToast('Reverted', res.message);
-                    this.fetchLogs(); // Refresh Log
-                    // Refresh data user juga barangkali yg direvert adalah user
+                    this.fetchLogs();
                     this.fetchKeyPeople();
                     this.fetchRegularUsers(1);
                 } else if (res?.error) {
                     this.showToast('Gagal', res.error, 'error');
                 }
             },
-            'danger', // Tipe modal merah/bahaya
+            'danger',
             'Ya, Revert'
         );
     }

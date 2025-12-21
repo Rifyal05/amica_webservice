@@ -5,11 +5,10 @@ from flask import Blueprint, request, jsonify, current_app
 from werkzeug.utils import secure_filename
 from ..models import db, Article, User
 from ..utils.decorators import admin_required
-from ..utils.logger import record_log # Pastikan import logger
+from ..utils.logger import record_log 
 
 article_bp = Blueprint('article_admin', __name__, url_prefix='/admin/articles')
 
-# Helper: Save Image
 def save_article_image(file):
     if not file: return None
     filename = secure_filename(file.filename)
@@ -70,6 +69,18 @@ def create_article(current_user):
         if not title or not content:
             return jsonify({'message': 'Judul dan Konten wajib diisi'}), 400
 
+        is_featured_request = request.form.get('is_featured') == 'true'
+
+        if is_featured_request:
+            current_featured_count = Article.query.filter_by(is_featured=True).count()
+            
+            if current_featured_count >= 10:
+                oldest_featured = Article.query.filter_by(is_featured=True)\
+                                               .order_by(Article.created_at.asc())\
+                                               .first()
+                if oldest_featured:
+                    oldest_featured.is_featured = False
+
         final_image = None
         if 'image' in request.files:
             final_image = save_article_image(request.files['image'])
@@ -88,20 +99,19 @@ def create_article(current_user):
             read_time=len(content.split()) // 200 + 1,# type: ignore
             source_name=request.form.get('source_name'),# type: ignore
             source_url=request.form.get('source_url'),# type: ignore
-            is_featured=request.form.get('is_featured') == 'true'# type: ignore
+            is_featured=is_featured_request # type: ignore 
         )
 
         db.session.add(new_article)
         db.session.commit()
 
-        # --- LOG CREATE ---
         record_log(
             actor_id=current_user.id,
-            target_id=str(new_article.id), # Simpan ID Artikel
+            target_id=str(new_article.id),
             target_type='Article',
             action='CREATE_ARTICLE',
             old_val=None,
-            new_val={'title': title, 'category': new_article.category},
+            new_val={'title': title, 'category': new_article.category, 'is_featured': is_featured_request},
             description=f"Menerbitkan artikel baru: {title[:50]}..."
         )
 
@@ -109,8 +119,9 @@ def create_article(current_user):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
 
-# UPDATE ARTICLE (PUT)
+# UPDATE ARTICLE
 @article_bp.route('/<int:id>', methods=['POST']) 
 @admin_required
 def update_article(current_user, id):
@@ -118,19 +129,31 @@ def update_article(current_user, id):
         article = Article.query.get(id)
         if not article: return jsonify({'message': 'Artikel tidak ditemukan'}), 404
 
-        # Snapshot data lama
+
         old_data = {
             'title': article.title,
             'category': article.category,
             'is_featured': article.is_featured
         }
 
+        new_is_featured = request.form.get('is_featured') == 'true'
+
+        if new_is_featured and not article.is_featured:
+            current_featured_count = Article.query.filter_by(is_featured=True).count()
+            
+            if current_featured_count >= 10:
+                oldest_featured = Article.query.filter(Article.is_featured == True, Article.id != id)\
+                                               .order_by(Article.created_at.asc())\
+                                               .first()
+                if oldest_featured:
+                    oldest_featured.is_featured = False
+
         article.title = request.form.get('title')
         article.content = request.form.get('content')
         article.category = request.form.get('category')
         article.source_name = request.form.get('source_name')
         article.source_url = request.form.get('source_url')
-        article.is_featured = request.form.get('is_featured') == 'true'
+        article.is_featured = new_is_featured 
         
         tags_raw = request.form.get('tags', '')
         article.tags = [t.strip() for t in tags_raw.split(',') if t.strip()]
@@ -143,14 +166,13 @@ def update_article(current_user, id):
         article.updated_at = datetime.now(timezone.utc)
         db.session.commit()
 
-        # --- LOG UPDATE ---
         record_log(
             actor_id=current_user.id,
             target_id=str(article.id),
             target_type='Article',
             action='UPDATE_ARTICLE',
             old_val=old_data,
-            new_val={'title': article.title, 'category': article.category},
+            new_val={'title': article.title, 'category': article.category, 'is_featured': article.is_featured},
             description=f"Mengedit artikel: {article.title[:50]}..."# type: ignore
         )
 
@@ -171,13 +193,12 @@ def delete_article(current_user, id):
         db.session.delete(article)
         db.session.commit()
 
-        # --- LOG DELETE ---
         record_log(
             actor_id=current_user.id,
-            target_id=None, # Target ID null karena artikel dihapus
+            target_id=None,
             target_type='Article',
             action='DELETE_ARTICLE',
-            old_val={'title': title_backup}, # Simpan judul buat kenang-kenangan
+            old_val={'title': title_backup},
             new_val=None,
             description=f"Menghapus artikel: {title_backup[:50]}..."
         )

@@ -1,5 +1,6 @@
 from .database import db
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
+from sqlalchemy.orm import relationship, backref
 import uuid
 from datetime import datetime, timezone
 
@@ -7,7 +8,7 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = db.Column(db.String(255), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)
     username = db.Column(db.String(25), unique=True, nullable=False)
     display_name = db.Column(db.String(50), nullable=False)
     google_uid = db.Column(db.String(128), unique=True, nullable=True)
@@ -21,6 +22,8 @@ class User(db.Model):
     suspended_until = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     security_pin_hash = db.Column(db.String(128), nullable=True)
+    is_saved_posts_public = db.Column(db.Boolean, default=False) 
+
 
 class Post(db.Model):
     __tablename__ = 'posts'
@@ -34,9 +37,12 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     likes_count = db.Column(db.Integer, default=0)
     comments_count = db.Column(db.Integer, default=0)
+    author = db.relationship('User', backref=backref('posts', lazy=True))
+
 
 class Comment(db.Model):
     __tablename__ = 'comments'
+
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     post_id = db.Column(UUID(as_uuid=True), db.ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
@@ -45,6 +51,13 @@ class Comment(db.Model):
     moderation_status = db.Column(db.String(20), default='approved')
     moderation_details = db.Column(JSONB)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    user = db.relationship('User', backref='comments')
+    replies = db.relationship(
+        'Comment',
+        backref=db.backref('parent', remote_side=[id]),
+        lazy=True, 
+        cascade="all, delete-orphan"
+    )
 
 class Connection(db.Model):
     __tablename__ = 'connections'
@@ -80,7 +93,7 @@ class Article(db.Model):
     read_time = db.Column(db.Integer)
     tags = db.Column(ARRAY(db.Text))
     source_name = db.Column(db.String(100))
-    source_url = db.Column(db.String(1024))
+    source_url = db.Column(db.String(1024), nullable=True, unique=True, index=True)
     is_featured = db.Column(db.Boolean, default=False)
     author_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -145,38 +158,47 @@ class Appeal(db.Model):
 class Chat(db.Model):
     __tablename__ = 'chats'
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    is_group = db.Column(db.Boolean, default=False)
+    name = db.Column(db.String(100), nullable=True)
+    image_url = db.Column(db.String(1024), nullable=True)
+    created_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=True)
+    last_message_text = db.Column(db.Text, nullable=True)
+    last_message_time = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    participants = db.relationship('ChatParticipant', backref='chat', cascade="all, delete-orphan", lazy=True)
+    messages = db.relationship('Message', backref='chat', cascade="all, delete-orphan", lazy='dynamic')
 
 class ChatParticipant(db.Model):
     __tablename__ = 'chat_participants'
     chat_id = db.Column(UUID(as_uuid=True), db.ForeignKey('chats.id', ondelete='CASCADE'), primary_key=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    is_admin = db.Column(db.Boolean, default=False)
+    unread_count = db.Column(db.Integer, default=0)
     joined_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    user = db.relationship('User', backref='chat_participations')
 
 class Message(db.Model):
     __tablename__ = 'messages'
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     chat_id = db.Column(UUID(as_uuid=True), db.ForeignKey('chats.id', ondelete='CASCADE'), nullable=False)
-    sender_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    text = db.Column(db.Text, nullable=False)
+    sender_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
+    text = db.Column(db.Text, nullable=True)
+    type = db.Column(db.String(20), default='text') # 'text', 'image', 'system'
+    attachment_url = db.Column(db.String(1024), nullable=True)
+    is_read_by_all = db.Column(db.Boolean, default=False)
     sent_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    sender = db.relationship('User', foreign_keys=[sender_id])
 
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
 
     id = db.Column(db.Integer, primary_key=True)
-    
     actor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
-    
     target_id = db.Column(db.String(100), nullable=True) 
-
-    
     target_type = db.Column(db.String(50)) 
     action = db.Column(db.String(50)) 
-    
     old_value = db.Column(JSONB, nullable=True) 
     new_value = db.Column(JSONB, nullable=True)
-    
     description = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 

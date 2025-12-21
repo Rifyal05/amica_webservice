@@ -27,7 +27,7 @@ class ImageModerationService:
         
         self.image_size = image_size
         self.gatekeeper_classes = ['safe', 'unsafe']
-        self.specialist_classes = ['disturbing', 'knife', 'nsfw', 'violence', 'weapon']
+        self.specialist_classes = ['disturbing', 'nsfw', 'violence', 'weapon']
         
         self.gatekeeper_input_name = self.gatekeeper_session.get_inputs()[0].name
         self.specialist_input_name = self.specialist_session.get_inputs()[0].name
