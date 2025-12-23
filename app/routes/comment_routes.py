@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from ..models import Comment, Post, User 
-from ..database import db
+from ..extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.post_classification_service import post_classifier
 import uuid

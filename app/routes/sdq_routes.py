@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from ..models import SdqResult
-from ..database import db
+from ..extensions import db
 from ..utils.decorators import token_required
 from ..services.sdq_scoring_service import sdq_scorer
 from ..services.interpretation_service import interpreter

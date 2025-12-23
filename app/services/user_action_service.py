@@ -1,5 +1,4 @@
-# app/services/user_action_service.py
-from ..database import db
+from ..extensions import db
 from ..models import BlockedUser, User
 from typing import List
 import uuid
@@ -38,8 +37,6 @@ class UserActionService:
         
         blocked_user_ids = [relation.blocked_id for relation in blocked_relations]
         
-        # Mengambil objek User berdasarkan daftar UUID yang diblokir
-        # Asumsi User model memiliki .in_() method
         blocked_users_list = User.query.filter(User.id.in_(blocked_user_ids)).all()
                 
         return blocked_users_list

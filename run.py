@@ -4,15 +4,13 @@ monkey.patch_all()
 import sys
 import os
 from app import create_app as pembuat_aplikasi
-from app.socket_instance import socketio
+from app.extensions import socketio
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 amica_app_obj = pembuat_aplikasi()
 
-if __name__ == '__main__':
-    print("Amica Socket Server (Gevent) is starting on http://0.0.0.0:5000")
-    
+if __name__ == '__main__':    
     socketio.run(
         amica_app_obj, 
         host='0.0.0.0', 

@@ -1,25 +1,97 @@
-<div x-show="currentView === 'articles'" x-transition.opacity x-cloak>
-    
+<div x-show="currentView === 'articles'" x-transition.opacity x-cloak x-data="ragLogic()" x-init="fetchRagStats()">
     <div class="flex justify-between items-center mb-6">
         <div>
             <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Artikel & Edukasi</h2>
-            <p class="text-sm text-gray-500">Bagikan wawasan kesehatan mental.</p>
+            <p class="text-sm text-gray-500 font-medium">Membangun Brain untuk Gemma 3 1B IT</p>
         </div>
-        <button @click="openArticleModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/30 transition">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-            Tulis Artikel
-        </button>
+
+        <div class="flex items-center gap-3">
+            <div class="hidden md:flex flex-col items-end mr-2" x-show="ragStats.total > 0">
+                <span class="text-[10px] text-indigo-400 font-extrabold uppercase tracking-widest text-right">RAG
+                    Indexing</span>
+                <span class="text-sm font-mono dark:text-gray-300">
+                    <span class="text-indigo-500" x-text="ragStats.ingested"></span>/<span
+                        x-text="ragStats.total"></span>
+                </span>
+            </div>
+
+            <button @click="openRagPreview()"
+                class="bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-white/20 transition shadow-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z">
+                    </path>
+                </svg>
+                Dataset
+            </button>
+
+            <button @click="startAutoIngest()" :disabled="isSyncing"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/30 transition transform active:scale-95 disabled:opacity-50">
+                <svg x-show="!isSyncing" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                </svg>
+                <span x-text="isSyncing ? 'Processing...' : 'Local Ingest'"></span>
+            </button>
+
+            <button @click="syncToCloud()" :disabled="isSyncing"
+                class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-500/30 transition transform active:scale-95 disabled:opacity-50">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                    </path>
+                </svg>
+                Sync Cloud
+            </button>
+
+            <button @click="isChatModalOpen = true"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/30 transition transform active:scale-95">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z">
+                    </path>
+                </svg>
+                Test Chat
+            </button>
+
+            <button @click="openArticleModal()"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-500/30 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Tulis Artikel
+            </button>
+        </div>
     </div>
 
-    <!-- LIST ARTIKEL -->
-    <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm">
+    <div x-show="isSyncing" x-transition
+        class="mb-6 rounded-2xl p-4 flex items-center justify-between border shadow-inner"
+        :class="isWaitMode ? 'bg-red-500/10 border-red-500/20' : 'bg-indigo-500/10 border-indigo-500/20'">
+        <div class="flex items-center gap-3">
+            <div class="w-2 h-2 rounded-full animate-ping" :class="isWaitMode ? 'bg-red-500' : 'bg-indigo-500'"></div>
+            <span class="text-xs font-bold" :class="isWaitMode ? 'text-red-400' : 'text-indigo-400'"
+                x-text="progressMessage"></span>
+        </div>
+        <div class="flex gap-4 items-center">
+            <span x-show="isWaitMode" class="text-xs font-black text-red-500 animate-pulse tracking-widest">RATE
+                LIMITED</span>
+            <span class="text-[10px] font-mono dark:text-gray-400 bg-black/20 px-2 py-1 rounded"
+                x-text="'Antrian: ' + ragStats.remaining"></span>
+        </div>
+    </div>
+
+    <div
+        class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm">
         <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
-                <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-white/5 text-gray-500">
+                <thead
+                    class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-white/5 text-gray-500 uppercase text-[10px] font-bold">
                     <tr>
-                        <th class="px-6 py-4">Judul</th>
+                        <th class="px-6 py-4">Judul Artikel</th>
+                        <th class="px-6 py-4 text-center">RAG Status</th>
                         <th class="px-6 py-4 text-center">Kategori</th>
-                        <th class="px-6 py-4 text-center">Penulis</th>
                         <th class="px-6 py-4 text-center">Tanggal</th>
                         <th class="px-6 py-4 text-right">Aksi</th>
                     </tr>
@@ -32,24 +104,49 @@
                                     <div class="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 shrink-0">
                                         <img :src="getArticleImg(art.image_url)" class="w-full h-full object-cover">
                                     </div>
-                                    <div class="max-w-xs truncate font-bold text-gray-800 dark:text-gray-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition" x-text="art.title"></div>
+                                    <div class="max-w-xs truncate font-bold text-gray-800 dark:text-gray-200 group-hover:text-blue-600 transition"
+                                        x-text="art.title"></div>
                                 </div>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <span class="px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded text-xs uppercase font-bold" x-text="art.category"></span>
+                                <template x-if="art.is_ingested">
+                                    <span
+                                        class="text-green-500 flex items-center justify-center gap-1 text-[10px] font-black uppercase">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd"
+                                                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                                clip-rule="evenodd"></path>
+                                        </svg>
+                                        Ready
+                                    </span>
+                                </template>
+                                <template x-if="!art.is_ingested">
+                                    <span
+                                        class="text-gray-400 text-[10px] font-bold uppercase tracking-tighter italic opacity-50">Pending</span>
+                                </template>
                             </td>
-                            <td class="px-6 py-4 text-center text-xs" x-text="art.author"></td>
+                            <td class="px-6 py-4 text-center">
+                                <span
+                                    class="px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded text-[10px] uppercase font-bold"
+                                    x-text="art.category"></span>
+                            </td>
                             <td class="px-6 py-4 text-center text-xs text-gray-500" x-text="art.created_at"></td>
-                            
-                            <!-- KOLOM AKSI (EDIT & DELETE) -->
                             <td class="px-6 py-4 text-right">
                                 <div class="flex justify-end gap-2">
-                                    <button @click="editArticle(art)" class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition" title="Edit Artikel">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                                    </button>
-                                    <button @click="deleteArticle(art.id)" class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition" title="Hapus Artikel">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                    </button>
+                                    <button @click="editArticle(art)"
+                                        class="p-2 text-gray-400 hover:text-blue-500 transition"><svg class="w-5 h-5"
+                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
+                                            </path>
+                                        </svg></button>
+                                    <button @click="deleteArticle(art.id)"
+                                        class="p-2 text-gray-400 hover:text-red-500 transition"><svg class="w-5 h-5"
+                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                            </path>
+                                        </svg></button>
                                 </div>
                             </td>
                         </tr>
@@ -57,113 +154,336 @@
                 </tbody>
             </table>
         </div>
-        
-        <div class="p-4 border-t border-gray-100 dark:border-white/5 flex justify-between">
-            <button @click="fetchArticles(articlePage-1)" :disabled="articlePage<=1" class="px-3 py-1 border rounded text-xs disabled:opacity-50 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">Prev</button>
-            <button @click="fetchArticles(articlePage+1)" class="px-3 py-1 border rounded text-xs hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">Next</button>
+        <div class="p-4 border-t border-gray-100 dark:border-white/5 flex justify-between items-center">
+            <span class="text-[10px] text-gray-400 font-mono" x-text="'Page ' + articlePage"></span>
+            <div class="flex gap-2">
+                <button @click="fetchArticles(articlePage-1)" :disabled="articlePage<=1"
+                    class="px-4 py-1 border dark:border-gray-700 rounded-lg text-xs disabled:opacity-30 hover:bg-gray-50 dark:hover:bg-white/5 transition">Prev</button>
+                <button @click="fetchArticles(articlePage+1)"
+                    class="px-4 py-1 border dark:border-gray-700 rounded-lg text-xs hover:bg-gray-50 dark:hover:bg-white/5 transition">Next</button>
+            </div>
         </div>
     </div>
 
-    <!-- MODAL FORM ARTIKEL (FULL SCREEN IMMERSIVE) -->
-    <div x-show="isArticleModalOpen" class="fixed inset-0 z-[100] bg-white dark:bg-[#0d1117] flex flex-col" x-transition.opacity x-cloak>
-        
-        <!-- HEADER (Sticky Top) -->
-        <div class="px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white/90 dark:bg-[#0d1117]/90 backdrop-blur sticky top-0 z-50">
+    <div x-show="isArticleModalOpen" class="fixed inset-0 z-[100] bg-white dark:bg-[#0d1117] flex flex-col"
+        x-transition.opacity x-cloak>
+        <div
+            class="px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white/90 dark:bg-[#0d1117]/90 backdrop-blur sticky top-0 z-50">
             <div class="flex items-center gap-4">
-                <button @click="isArticleModalOpen = false" class="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                <button @click="isArticleModalOpen = false"
+                    class="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
                 </button>
                 <div>
-                    <h3 class="text-lg font-bold text-gray-800 dark:text-white" x-text="articleForm.id ? 'Edit Artikel' : 'Tulis Artikel Baru'"></h3>
+                    <h3 class="text-lg font-bold text-gray-800 dark:text-white"
+                        x-text="articleForm.id ? 'Edit Artikel' : 'Tulis Artikel Baru'"></h3>
                     <p x-show="hasDraft && !articleForm.id" class="text-xs text-orange-500 flex items-center gap-1">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Draft tersimpan lokal
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Draft tersimpan
                     </p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <button @click="clearDraft()" class="px-4 py-2 text-sm text-gray-400 hover:text-red-500 transition">Reset</button>
-                <button @click="submitArticle()" class="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold shadow-lg shadow-blue-500/30 transition transform active:scale-95 flex items-center gap-2">
+                <button @click="clearDraft()"
+                    class="px-4 py-2 text-sm text-gray-400 hover:text-red-500 transition">Reset</button>
+                <button @click="submitArticle()"
+                    class="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold shadow-lg shadow-blue-500/30 transition transform active:scale-95 flex items-center gap-2">
                     <span x-text="articleForm.id ? 'Simpan Perubahan' : 'Publikasikan'"></span>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
+                    </svg>
                 </button>
             </div>
         </div>
 
-        <!-- EDITOR BODY -->
         <div class="flex-1 overflow-y-auto">
             <div class="max-w-5xl mx-auto px-8 py-10 pb-32">
-                
-                <!-- A. COVER IMAGE (Wide Cinematic) -->
                 <div class="space-y-4 mb-10">
-                    <div class="relative group w-full aspect-video md:h-[400px] bg-gray-50 dark:bg-[#161b22] rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center cursor-pointer overflow-hidden transition hover:border-blue-500" @click="$refs.artImg.click()">
-                        <!-- Preview -->
-                        <img x-show="articleForm.preview" :src="articleForm.preview" class="w-full h-full object-cover absolute inset-0">
-                        
-                        <!-- Overlay Placeholder -->
-                        <div class="z-10 flex flex-col items-center text-gray-400 group-hover:text-blue-500 transition" :class="articleForm.preview ? 'opacity-0 group-hover:opacity-100 bg-black/60 absolute inset-0 justify-center text-white' : ''">
-                            <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <div class="relative group w-full aspect-video md:h-[400px] bg-gray-50 dark:bg-[#161b22] rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center cursor-pointer overflow-hidden transition hover:border-blue-500"
+                        @click="$refs.artImg.click()">
+                        <img x-show="articleForm.preview" :src="articleForm.preview"
+                            class="w-full h-full object-cover absolute inset-0">
+                        <div class="z-10 flex flex-col items-center text-gray-400 group-hover:text-blue-500 transition"
+                            :class="articleForm.preview ? 'opacity-0 group-hover:opacity-100 bg-black/60 absolute inset-0 justify-center text-white' : ''">
+                            <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                </path>
+                            </svg>
                             <span class="text-sm font-medium">Upload Cover Artikel</span>
                         </div>
                         <input type="file" x-ref="artImg" @change="handleArticleImage" class="hidden" accept="image/*">
                     </div>
-
-                    <!-- Input URL Manual (Opsi Tambahan) -->
-                    <input type="text" x-model="articleForm.image_url_manual" @input="articleForm.preview = articleForm.image_url_manual" 
-                           placeholder="Atau tempel link gambar (https://...)" 
-                           class="w-full px-4 py-2 bg-transparent border-b border-gray-200 dark:border-gray-800 text-sm text-gray-500 focus:text-gray-800 dark:focus:text-gray-200 focus:border-blue-500 outline-none transition">
+                    <input type="text" x-model="articleForm.image_url_manual"
+                        @input="articleForm.preview = articleForm.image_url_manual"
+                        placeholder="Atau tempel link gambar (https://...)"
+                        class="w-full px-4 py-2 bg-transparent border-b border-gray-200 dark:border-gray-800 text-sm text-gray-500 focus:text-gray-800 dark:focus:text-gray-200 focus:border-blue-500 outline-none transition">
                 </div>
 
-                <!-- B. JUDUL BESAR -->
                 <textarea x-model="articleForm.title" rows="1"
-                       class="w-full bg-transparent border-none outline-none text-5xl md:text-6xl font-extrabold text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 leading-tight resize-none mb-8" 
-                       placeholder="Judul Artikel..."></textarea>
+                    class="w-full bg-transparent border-none outline-none text-5xl md:text-6xl font-extrabold text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 leading-tight resize-none mb-8"
+                    placeholder="Judul Artikel..."></textarea>
 
-                <!-- C. METADATA GRID -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                    <!-- Kategori -->
                     <div class="group">
-                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Kategori</label>
-                        <input list="categoryList" x-model="articleForm.category" class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-lg focus:border-blue-500 outline-none transition dark:text-gray-200" placeholder="Pilih...">
+                        <label
+                            class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Kategori</label>
+                        <input list="categoryList" x-model="articleForm.category"
+                            class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-lg focus:border-blue-500 outline-none transition dark:text-gray-200"
+                            placeholder="Pilih...">
                         <datalist id="categoryList">
-                            <option value="CyberBullying"><option value="Peran Orang tua"><option value="Penanganan kasus"><option value="Hukum dan Keamanan"><option value="Lingkungan Sekolah"><option value="Parenting Positif"><option value="Kesehatan Mental"><option value="Perilaku dan Psikologi">
+                            <option value="Bullying">
+                            <option value="Peran Orang tua">
+                            <option value="Penanganan kasus">
+                            <option value="Hukum dan Keamanan">
+                            <option value="Lingkungan Sekolah">
+                            <option value="Parenting Positif">
+                            <option value="Kesehatan Mental">
+                            <option value="Perilaku dan Psikologi">
                         </datalist>
                     </div>
 
-                    <!-- Tags -->
                     <div class="group">
-                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Tags</label>
-                        <input type="text" x-model="articleForm.tags" @input="formatTagsInput()" class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-lg focus:border-blue-500 outline-none transition font-mono text-blue-600 dark:text-blue-400" placeholder="#tag1, #tag2">
-                    </div>
-
-                    <!-- Source -->
-                    <div class="group">
-                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Nama Sumber</label>
-                        <input type="text" x-model="articleForm.source_name" class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-base focus:border-blue-500 outline-none transition dark:text-gray-300" placeholder="Optional">
+                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Tags (Auto
+                            Format)</label>
+                        <input type="text" x-model="articleForm.tags" @input="formatTagsInput()"
+                            class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-lg focus:border-blue-500 outline-none transition font-mono text-blue-600 dark:text-blue-400"
+                            placeholder="#tag_satu, #tag_dua">
                     </div>
 
                     <div class="group">
-                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Link Sumber</label>
-                        <input type="url" x-model="articleForm.source_url" class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-base focus:border-blue-500 outline-none transition dark:text-gray-300" placeholder="https://...">
+                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Nama
+                            Sumber</label>
+                        <input type="text" x-model="articleForm.source_name"
+                            class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-base focus:border-blue-500 outline-none transition dark:text-gray-300"
+                            placeholder="Optional">
+                    </div>
+
+                    <div class="group">
+                        <label class="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Link
+                            Sumber</label>
+                        <input type="url" x-model="articleForm.source_url"
+                            class="w-full bg-transparent border-b border-gray-200 dark:border-gray-700 py-2 text-base focus:border-blue-500 outline-none transition dark:text-gray-300"
+                            placeholder="https://...">
                     </div>
                 </div>
 
-                <!-- D. CONTENT EDITOR -->
                 <div class="relative">
-                    <textarea x-model="articleForm.content" 
-                              placeholder="Mulai menulis cerita inspiratif di sini..." 
-                              class="w-full min-h-[600px] bg-transparent border-none outline-none text-xl text-gray-700 dark:text-gray-300 leading-9 resize-none font-serif placeholder-gray-300 dark:placeholder-gray-800"></textarea>
+                    <textarea x-model="articleForm.content" placeholder="Mulai menulis cerita inspiratif di sini..."
+                        class="w-full min-h-[600px] bg-transparent border-none outline-none text-xl text-gray-700 dark:text-gray-300 leading-9 resize-none font-serif placeholder-gray-300 dark:placeholder-gray-800"></textarea>
                 </div>
 
-                <!-- E. FEATURED TOGGLE -->
                 <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-800">
                     <label class="inline-flex items-center cursor-pointer gap-3">
-                        <input type="checkbox" x-model="articleForm.is_featured" class="w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500">
-                        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Jadikan Featured Article (Unggulan di Beranda)</span>
+                        <input type="checkbox" x-model="articleForm.is_featured"
+                            class="w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer">
+                        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Jadikan Featured Article
+                            (Unggulan di Beranda)</span>
                     </label>
                 </div>
-
             </div>
         </div>
     </div>
+
+    <div x-show="isRagModalOpen"
+        class="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 md:p-10"
+        x-transition.opacity x-cloak>
+        <div
+            class="bg-white dark:bg-[#0d1117] w-full max-w-6xl h-full rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-white/10">
+            <div
+                class="px-8 py-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-white/[0.02]">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white">RAG Dataset Explorer</h3>
+                    <p class="text-xs text-gray-500 font-mono">Strategy: Multi-Chunk Exhaustive Generation for Gemma 3
+                        1B IT</p>
+                </div>
+                <button @click="isRagModalOpen = false"
+                    class="p-2 bg-gray-200 dark:bg-white/10 rounded-full hover:scale-110 transition text-gray-600 dark:text-gray-300">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar bg-gray-50 dark:bg-black/10">
+                <template x-for="(item, index) in ragList" :key="index">
+                    <div
+                        class="group bg-white dark:bg-white/[0.03] rounded-2xl p-6 border border-gray-200 dark:border-white/5 hover:border-indigo-500/50 transition shadow-sm">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h4 class="font-bold text-indigo-600 dark:text-indigo-400 text-lg leading-tight mb-1"
+                                    x-text="item.metadata.title"></h4>
+                                <div class="flex gap-2">
+                                    <span
+                                        class="text-[9px] font-black px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-500 uppercase tracking-tighter"
+                                        x-text="item.metadata.chunk_type"></span>
+                                    <span
+                                        class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-400 uppercase tracking-widest"
+                                        x-text="item.metadata.category"></span>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-mono text-gray-400"
+                                x-text="item.metadata.ingested_at.split('T')[0]"></span>
+                        </div>
+
+                        <div class="text-sm">
+                            <template x-if="item.metadata.chunk_type === 'knowledge_core'">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="space-y-2">
+                                        <span
+                                            class="text-[10px] font-bold text-gray-400 uppercase border-b border-white/5 block pb-1">Ringkasan
+                                            Komprehensif</span>
+                                        <p class="text-gray-700 dark:text-gray-200 leading-relaxed text-xs italic"
+                                            x-text="item.page_content.split('## Ringkasan Komprehensif')[1]?.split('## Poin Utama')[0]?.trim()">
+                                        </p>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <span
+                                            class="text-[10px] font-bold text-gray-400 uppercase border-b border-white/5 block pb-1">Knowledge
+                                            Base (FAQ)</span>
+                                        <div
+                                            class="text-xs text-gray-500 space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                            <template
+                                                x-for="line in (item.page_content.split('## FAQ')[1]?.trim().split('\n') || [])">
+                                                <div class="pl-2 border-l-2 border-indigo-500/20 py-1 bg-gray-50 dark:bg-white/5 rounded-r-lg"
+                                                    x-text="line"></div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template x-if="item.metadata.chunk_type === 'key_points'">
+                                <div class="bg-indigo-500/5 p-4 rounded-xl border border-indigo-500/10">
+                                    <span class="text-[10px] font-bold text-indigo-400 uppercase block mb-3">Core
+                                        Extraction</span>
+                                    <div class="text-gray-700 dark:text-gray-300 text-xs space-y-2">
+                                        <template
+                                            x-for="point in (item.page_content.split('## Poin Utama')[1]?.trim().split('\n') || [])">
+                                            <div class="flex gap-2">
+                                                <span class="text-indigo-500">•</span>
+                                                <span x-text="point.replace('*', '').trim()"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template x-if="item.metadata.chunk_type.includes('reference_part')">
+                                <div
+                                    class="bg-gray-100 dark:bg-black/30 p-4 rounded-xl border border-dashed border-gray-300 dark:border-white/5">
+                                    <span class="text-[10px] font-bold text-gray-500 uppercase block mb-2"
+                                        x-text="'Source Fragment ' + item.metadata.chunk_type"></span>
+                                    <p class="text-gray-500 dark:text-gray-400 text-[11px] line-clamp-3 leading-relaxed"
+                                        x-text="item.page_content.split('## Detail Referensi')[1]?.split('\n').slice(1).join('\n').trim()">
+                                    </p>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div class="mt-4 pt-4 border-t border-gray-100 dark:border-white/5 flex items-center gap-2">
+                            <svg class="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.826a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1">
+                                </path>
+                            </svg>
+                            <span
+                                class="text-[10px] text-gray-400 truncate font-mono select-all hover:text-blue-500 cursor-pointer"
+                                x-text="item.metadata.source_url || 'No Source URL'"></span>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="ragList.length === 0" class="text-center py-24 italic text-gray-500">Belum ada dataset RAG
+                    yang dihasilkan. Silakan Sync.</div>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="isChatModalOpen"
+        class="fixed inset-0 z-[160] flex items-center justify-center bg-black/80 backdrop-blur-sm" x-transition.opacity
+        x-cloak>
+        <div
+            class="bg-white dark:bg-[#0d1117] w-full h-full md:w-[600px] md:h-[700px] md:rounded-3xl shadow-2xl flex flex-col relative overflow-hidden border border-white/10">
+            <div
+                class="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-white/[0.02]">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-lg">
+                        A</div>
+                    <div>
+                        <h3 class="font-bold text-gray-800 dark:text-white">Amica Brain Test</h3>
+                        <p class="text-xs text-green-500 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Online
+                        </p>
+                    </div>
+                </div>
+                <button @click="isChatModalOpen = false" class="btn btn-sm btn-circle btn-ghost">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 bg-white dark:bg-[#0d1117] custom-scrollbar"
+                id="chatContainer">
+                <template x-for="(chat, index) in chatHistory" :key="index">
+                    <div :class="chat.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                        <div class="max-w-[85%]"
+                            :class="chat.role === 'user' ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-none p-4' : 'bg-gray-100 dark:bg-white/5 text-gray-800 dark:text-gray-200 rounded-2xl rounded-tl-none p-4'">
+                            <div class="text-sm leading-relaxed chat-content" x-html="renderMarkdown(chat.text)"></div>
+                            <template x-if="chat.source && chat.source.url">
+                                <div class="mt-3 pt-3 border-t border-white/20 text-xs">
+                                    <a :href="chat.source.url" target="_blank"
+                                        class="flex items-center gap-2 hover:underline opacity-80 hover:opacity-100">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1">
+                                            </path>
+                                        </svg>
+                                        <span x-text="chat.source.title || 'Sumber Referensi'"></span>
+                                    </a>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <div x-show="isChatLoading" class="flex justify-start">
+                    <div class="bg-gray-100 dark:bg-white/5 rounded-2xl rounded-tl-none p-4 flex gap-2 items-center">
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                            style="animation-delay: 0.2s"></span>
+                        <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                            style="animation-delay: 0.4s"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+                <div class="flex gap-2">
+                    <input type="text" x-model="chatInput" @keydown.enter="sendTestChat"
+                        class="flex-1 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition"
+                        placeholder="Tulis pesan ke Amica...">
+                    <button @click="sendTestChat" :disabled="isChatLoading || !chatInput.trim()"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/admin_rag.js"></script>
 </div>

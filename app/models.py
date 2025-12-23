@@ -1,4 +1,4 @@
-from .database import db
+from .extensions import db
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from sqlalchemy.orm import relationship, backref
 import uuid
@@ -22,7 +22,9 @@ class User(db.Model):
     suspended_until = db.Column(db.DateTime(timezone=True))
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     security_pin_hash = db.Column(db.String(128), nullable=True)
-    is_saved_posts_public = db.Column(db.Boolean, default=False) 
+    is_saved_posts_public = db.Column(db.Boolean, default=False)
+    reset_otp = db.Column(db.String(6), nullable=True)
+    reset_otp_expires = db.Column(db.DateTime(timezone=True), nullable=True) 
 
 
 class Post(db.Model):
@@ -98,6 +100,8 @@ class Article(db.Model):
     author_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    is_ingested = db.Column(db.Boolean, default=False)
+    ingested_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
 class Feedback(db.Model):
     __tablename__ = 'feedback'

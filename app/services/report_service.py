@@ -1,5 +1,5 @@
 from ..models import Report
-from ..database import db
+from ..extensions import db
 
 def create_report(reporter_id, target_type, target_id, reason):
     """Logika dasar untuk menyimpan laporan ke database."""

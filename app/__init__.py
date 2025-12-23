@@ -1,7 +1,7 @@
 import os
 from flask import Flask 
 from .config import Config
-from .database import db
+from .extensions import db, bcrypt, jwt, mail, socketio
 from .routes.auth_routes import auth_bp, bcrypt
 from .routes.post_routes import post_bp
 from .routes.sdq_routes import sdq_bp
@@ -11,11 +11,18 @@ from .routes.user_routes import user_bp
 from .routes.feedback_routes import feedback_bp
 from .routes.admin_routes import admin_bp 
 from .routes.article_routes import article_bp
+from .routes.admin_ai_routes import ai_bp
 from .routes.api_routes import api_bp
 from .routes.report_routes import report_bp 
 from .routes.chat_routes import chat_bp
 from flask_jwt_extended import JWTManager 
-from .socket_instance import socketio 
+from .routes.password_routes import password_bp
+from flask_mail import Mail
+from .routes.password_routes import password_bp 
+
+
+mail = Mail()
+
 
 def create_app():
     flask_instance = Flask(__name__)
@@ -27,6 +34,9 @@ def create_app():
     bcrypt.init_app(flask_instance)
     socketio.init_app(flask_instance)
 
+    mail.init_app(flask_instance)
+
+
     # Register Blueprint 
     flask_instance.register_blueprint(auth_bp, url_prefix='/api/auth')
     flask_instance.register_blueprint(post_bp, url_prefix='/api/posts')
@@ -36,10 +46,13 @@ def create_app():
     flask_instance.register_blueprint(user_bp, url_prefix='/api/users')
     flask_instance.register_blueprint(feedback_bp, url_prefix='/api/feedback')
     flask_instance.register_blueprint(article_bp)
+    flask_instance.register_blueprint(ai_bp)
     flask_instance.register_blueprint(api_bp)
     flask_instance.register_blueprint(report_bp, url_prefix='/api/report')
     flask_instance.register_blueprint(admin_bp, url_prefix='/admin')
     flask_instance.register_blueprint(chat_bp, url_prefix='/api/chats')
+    flask_instance.register_blueprint(password_bp, url_prefix='/api/password')
+
 
     @flask_instance.context_processor
     def inject_firebase_config():

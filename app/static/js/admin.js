@@ -59,7 +59,7 @@ document.addEventListener('alpine:init', () => {
             show: false,
             title: '',
             message: '',
-            type: 'primary', 
+            type: 'primary',
             confirmText: 'Ya',
             callback: null
         },
@@ -84,6 +84,9 @@ document.addEventListener('alpine:init', () => {
             { label: 'Tahun Ini', val: '1y' }, { label: '5 Tahun', val: '5y' }, { label: '10 Tahun', val: '10y' }, { label: 'Semua', val: 'all' }
         ],
 
+        ragStats: { total: 0, ingested: 0, remaining: 0 },
+
+
         // INIT & UTILS
         initApp() {
             if (!this.token) window.location.href = '/admin/login';
@@ -100,10 +103,13 @@ document.addEventListener('alpine:init', () => {
             this.fetchFeedback();
             this.fetchArticles();
             this.fetchLogs();
+            this.fetchRagStats(); 
         },
 
         ...blacklistLogic(),
         ...activityLogLogic(),
+        ...ragLogic(), 
+
 
 
         async authFetch(url, opts = {}) {
@@ -469,14 +475,15 @@ document.addEventListener('alpine:init', () => {
 
         formatTagsInput() {
             let val = this.articleForm.tags;
-            val = val.replace(/[^a-zA-Z0-9_, ]/g, '');
-            val = val.replace(/, +/g, ',');
-            val = val.replace(/ +/g, '_');
+            val = val.replace(/ /g, '_');
+            val = val.replace(/_+/g, '_'); 
+            val = val.replace(/,_/g, ','); 
+            val = val.replace(/_,/g, ',');             
             this.articleForm.tags = val;
         },
 
         editArticle(art) {
-            this.clearDraft(false); 
+            this.clearDraft(false);
             this.articleForm = {
                 id: art.id,
                 title: art.title,
@@ -485,7 +492,7 @@ document.addEventListener('alpine:init', () => {
                 tags: Array.isArray(art.tags) ? art.tags.join(',') : (art.tags || ''),
                 source_name: art.source_name || '',
                 source_url: art.source_url || '',
-                image: null, 
+                image: null,
                 image_url_manual: '',
                 preview: this.getArticleImg(art.image_url),
                 is_featured: art.is_featured
@@ -494,16 +501,18 @@ document.addEventListener('alpine:init', () => {
             this.isArticleModalOpen = true;
         },
 
-        async submitArticle() {
-            if (!this.articleForm.title || !this.articleForm.content) return alert("Judul dan Konten wajib diisi");
+         async submitArticle() {
+            if (!this.articleForm.title || !this.articleForm.content) {
+                return this.showToast('Error', "Judul dan Konten wajib diisi", 'error');
+            }
 
             const formData = new FormData();
             formData.append('title', this.articleForm.title);
             formData.append('category', this.articleForm.category);
             formData.append('content', this.articleForm.content);
             formData.append('tags', this.articleForm.tags);
-            formData.append('source_name', this.articleForm.source_name);
-            formData.append('source_url', this.articleForm.source_url);
+            formData.append('source_name', this.articleForm.source_name || '');
+            formData.append('source_url', this.articleForm.source_url || '');
             formData.append('is_featured', this.articleForm.is_featured);
 
             if (this.articleForm.image) {
@@ -514,7 +523,7 @@ document.addEventListener('alpine:init', () => {
 
             let url = '/admin/articles/';
             if (this.articleForm.id) {
-                url = `/admin/articles/${this.articleForm.id}`; 
+                url = `/admin/articles/${this.articleForm.id}`; // Edit Mode
             }
 
             try {
@@ -527,15 +536,15 @@ document.addEventListener('alpine:init', () => {
                 const data = await res.json();
 
                 if (res.ok) {
-                    this.showToast('Sukses', this.articleForm.id ? 'Artikel diperbarui!' : 'Artikel diterbitkan!');
+                    this.showToast('Sukses', data.message);
                     this.isArticleModalOpen = false;
                     this.clearDraft(false);
-                    this.fetchArticles();
+                    this.fetchArticles(this.articlePage); // Refresh list
                 } else {
-                    alert(data.message || data.error);
+                    this.showToast('Gagal', data.message || data.error, 'error');
                 }
             } catch (e) {
-                alert("Terjadi kesalahan jaringan.");
+                this.showToast('Error', "Terjadi kesalahan jaringan.", 'error');
             }
         },
 

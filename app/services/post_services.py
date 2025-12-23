@@ -1,5 +1,5 @@
 from ..models import SavedPost, Post, User
-from ..database import db
+from ..extensions import db
 
 def toggle_save_post(user_id, post_id):
     existing_save = SavedPost.query.filter_by(user_id=user_id, post_id=post_id).first()

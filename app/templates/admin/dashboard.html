@@ -424,17 +424,13 @@
                     return res.json();
                 },
 
-                // --- PERBAIKAN DI SINI ---
                 async fetchStats() { 
-                    // Ambil offset timezone user (otomatis browser). Contoh: -420 (WIB)
                     const tzOffset = new Date().getTimezoneOffset();
-                    // Kirim offset ke backend
                     const url = `/admin/stats?range=${this.currentStatsRange}&tz_offset=${tzOffset}`;
                     
                     this.stats = await this.authFetch(url) || {}; 
                     if(this.stats.chart_data) setTimeout(() => this.renderCharts(this.stats.chart_data), 100); 
                 },
-                // -------------------------
 
                 async fetchReports() { this.reports = await this.authFetch('/admin/reports') || []; },
                 async fetchUsers() { this.usersList = await this.authFetch('/admin/users-list') || []; },

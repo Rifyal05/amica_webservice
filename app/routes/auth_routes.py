@@ -2,7 +2,7 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from flask import Blueprint, request, jsonify
 from ..models import User
-from ..database import db
+from ..extensions import db
 from flask_bcrypt import Bcrypt
 from datetime import datetime, timezone
 import os
@@ -340,7 +340,6 @@ def google_user_login():
         access_token = create_access_token(identity=str(user.id))
         refresh_token = create_refresh_token(identity=str(user.id))
 
-        print("=== LOGIN BERHASIL ===")
         return jsonify({
             "message": "Login berhasil",
             "access_token": access_token,
@@ -465,3 +464,65 @@ def set_password():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "Gagal mengatur password", "details": str(e)}), 500
+
+
+@auth_bp.route('/change-password', methods=['POST'])
+@jwt_required()
+def change_password():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    data = request.get_json()
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    
+    if not user.password_hash: # type: ignore
+        return jsonify({"error": "Akun Google tidak bisa ganti password di sini"}), 400
+        
+    if not bcrypt.check_password_hash(user.password_hash, old_password): # type: ignore
+        return jsonify({"error": "Password lama salah"}), 400
+        
+    if len(new_password) < 6:
+        return jsonify({"error": "Password baru minimal 6 karakter"}), 400
+
+    user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8') # type: ignore
+    db.session.commit()
+    
+    return jsonify({"message": "Password berhasil diubah"}), 200
+
+@auth_bp.route('/change-email', methods=['POST'])
+@jwt_required()
+def change_email():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    data = request.get_json()
+    new_email = data.get('new_email').lower()
+    password = data.get('password')
+    
+    if not new_email or not password:
+        return jsonify({"error": "Data tidak lengkap"}), 400
+        
+    # Cek Password
+    if not user.password_hash or not bcrypt.check_password_hash(user.password_hash, password): # type: ignore
+        return jsonify({"error": "Password salah"}), 400
+        
+    # Cek Email Unik
+    if User.query.filter_by(email=new_email).first():
+        return jsonify({"error": "Email sudah digunakan orang lain"}), 409
+        
+    user.email = new_email # type: ignore
+    db.session.commit()
+    
+    return jsonify({"message": "Email berhasil diubah"}), 200
+
+
+@auth_bp.route('/logout-device', methods=['POST'])
+@jwt_required()
+def logout_device():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    if user:
+        user.onesignal_player_id = None
+        db.session.commit()
+    return jsonify({"message": "Device ID cleared"}), 200

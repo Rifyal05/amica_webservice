@@ -1,12 +1,24 @@
 from flask import request
 from flask_socketio import emit, join_room, leave_room
-from .socket_instance import socketio
+from .extensions import socketio
 from .models import db, User, Chat, Message, ChatParticipant
+from .extensions import db
 from .config import Config
 from .services.notification_service import send_push_notification
 import jwt
 import uuid
 from datetime import datetime, timezone
+
+def get_full_url(path):
+    if not path:
+        return ""
+    if path.startswith(('http://', 'https://')):
+        return path
+    base_url = request.host_url.rstrip('/')
+    clean_path = path.lstrip('/')
+    if not clean_path.startswith('static/'):
+        clean_path = f"static/uploads/{clean_path}"
+    return f"{base_url}/{clean_path}"
 
 def get_user_from_token():
     token = request.args.get('token')
@@ -36,7 +48,6 @@ def handle_connect():
         return False 
     
     join_room(str(user.id))
-    print(f"Socket Terhubung: {user.username} (Room ID: {user.id})")
 
 @socketio.on('join_chat')
 def handle_join_chat(data):
@@ -60,43 +71,52 @@ def handle_send_message(data):
     text = data.get('text')
     msg_type = data.get('type', 'text')
 
-    new_message = Message(
-        id=uuid.uuid4(), # type: ignore
-        chat_id=chat_id, # type: ignore
-        sender_id=sender.id,# type: ignore
-        text=text,# type: ignore
-        type=msg_type,# type: ignore
-        sent_at=datetime.now(timezone.utc)# type: ignore
-    )
+    new_message = Message()
+    new_message.id = uuid.uuid4()
+    new_message.chat_id = chat_id
+    new_message.sender_id = sender.id
+    new_message.text = text
+    new_message.type = msg_type
+    new_message.sent_at = datetime.now(timezone.utc)
     db.session.add(new_message)
 
     chat = Chat.query.get(chat_id)
     if chat:
         chat.last_message_text = text if msg_type == 'text' else '📷 Mengirim gambar'
-        chat.last_message_time = datetime.now(timezone.utc)
+        chat.last_message_time = new_message.sent_at
     
     participants = ChatParticipant.query.filter_by(chat_id=chat_id).all()
+    
     for p in participants:
-        if str(p.user_id) != str(sender.id):
+        pid = str(p.user_id).lower()
+        sid = str(sender.id).lower()
+
+        if pid != sid:
             p.unread_count += 1
-            
             receiver = User.query.get(p.user_id)
+            
             if receiver and receiver.onesignal_player_id:
+                print(f" Mengirim notif ke: {receiver.username} (ID: {receiver.onesignal_player_id})")
                 send_push_notification(
                     player_ids=[receiver.onesignal_player_id],
                     title=f"{sender.display_name}",
                     content=text if msg_type == 'text' else '📷 Mengirim gambar',
                     data={"chat_id": chat_id, "type": "chat_message"}
                 )
+            else:
+                print(f"Skip notif: {receiver.username if receiver else 'Unknown'} tidak punya Player ID")
+        else:
+            print(f"Skip notif: {sender.username} adalah pengirim (pid == sid)")
 
     db.session.commit()
 
     response_data = {
         'id': str(new_message.id),
+        'chat_id': str(chat_id),
         'text': new_message.text,
         'sender_id': str(sender.id),
         'sender_name': sender.username,
-        'sender_avatar': sender.avatar_url,
+        'sender_avatar': get_full_url(sender.avatar_url),
         'sent_at': new_message.sent_at.isoformat(),
         'type': msg_type,
         'is_read': False
@@ -105,11 +125,11 @@ def handle_send_message(data):
     emit('new_message', response_data, to=chat_id)
     
     for p in participants:
-        if str(p.user_id) != str(sender.id):
+        if str(p.user_id).lower() != str(sender.id).lower():
             emit('inbox_update', {
-                'chat_id': chat_id,
-                'last_message': chat.last_message_text,# type: ignore
-                'time': chat.last_message_time.isoformat(),# type: ignore
+                'chat_id': str(chat_id),
+                'last_message': chat.last_message_text, # type: ignore
+                'time': chat.last_message_time.isoformat(), # type: ignore
                 'unread_count': p.unread_count
             }, to=str(p.user_id))
 
@@ -121,6 +141,7 @@ def handle_typing(data):
     
     if sender:
         emit('user_typing', {
+            'chat_id': chat_id,
             'user_id': str(sender.id),
             'username': sender.username,
             'is_typing': is_typing

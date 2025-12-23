@@ -397,10 +397,13 @@ def update_device_id():
         if not player_id:
             return jsonify({'error': 'Player ID required'}), 400
             
+        User.query.filter(User.onesignal_player_id == player_id).update({User.onesignal_player_id: None})
+        
         user = User.query.get(current_user_id)
         user.onesignal_player_id = player_id # type: ignore
         db.session.commit()
         
-        return jsonify({'message': 'Device ID updated'}), 200
+        return jsonify({'message': 'Device ID updated and unified'}), 200
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500

@@ -9,7 +9,7 @@ import sys
 from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..'))) 
-from app.database import db
+from app.extensions import db
 
 load_dotenv() 
 

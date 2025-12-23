@@ -1,11 +1,29 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app 
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, Chat, ChatParticipant, Message, User
 from sqlalchemy import desc, func
 import uuid
 from datetime import datetime, timezone
+from gradio_client import Client
+import json
+from flask import Response, stream_with_context
+from app.utils.decorators import admin_required
+import threading
+import os
+
 
 chat_bp = Blueprint('chat', __name__)
+
+def get_full_url(path):
+    if not path:
+        return ""
+    if path.startswith(('http://', 'https://')):
+        return path
+    base_url = request.host_url.rstrip('/')
+    clean_path = path.lstrip('/')
+    if not clean_path.startswith('static/'):
+        clean_path = f"static/uploads/{clean_path}"
+    return f"{base_url}/{clean_path}"
 
 @chat_bp.route('/inbox', methods=['GET'])
 @jwt_required()
@@ -28,12 +46,18 @@ def get_inbox():
                 other_participant = User.query.get(other_p.user_id)
 
         my_p_info = ChatParticipant.query.filter_by(chat_id=chat.id, user_id=user_id).first()
+        
+        raw_image = ""
+        if chat.is_group:
+            raw_image = chat.image_url
+        elif other_participant:
+            raw_image = other_participant.avatar_url
 
         results.append({
             "id": str(chat.id),
             "is_group": chat.is_group,
             "name": chat.name if chat.is_group else (other_participant.display_name if other_participant else "User"),
-            "image_url": chat.image_url if chat.is_group else (other_participant.avatar_url if other_participant else ""),
+            "image_url": get_full_url(raw_image),
             "last_message_text": chat.last_message_text,
             "last_message_time": chat.last_message_time.isoformat() if chat.last_message_time else None,
             "unread_count": my_p_info.unread_count if my_p_info else 0
@@ -56,7 +80,7 @@ def get_or_create_chat(target_user_id):
 
     if existing_chat:
         return jsonify({"chat_id": str(existing_chat.id), "success": True}), 200
-    
+
     new_chat = Chat()
     new_chat.id = uuid.uuid4()
     new_chat.is_group = False
@@ -79,7 +103,6 @@ def get_or_create_chat(target_user_id):
 @jwt_required()
 def get_messages(chat_id):
     messages = Message.query.filter_by(chat_id=chat_id).order_by(desc(Message.sent_at)).limit(50).all()
-    
     results = []
     for msg in messages:
         results.append({
@@ -88,7 +111,41 @@ def get_messages(chat_id):
             "sender_id": str(msg.sender_id) if msg.sender_id else None,
             "text": msg.text,
             "type": msg.type,
-            "sent_at": msg.sent_at.isoformat()
+            "sent_at": msg.sent_at.isoformat(),
+            "is_read": msg.is_read_by_all
         })
-    
     return jsonify(results), 200
+
+
+
+# GRADIO CLIENT
+ai_lock = threading.Lock()
+_ai_client = None
+
+def get_ai_response(message):
+    global _ai_client
+    with ai_lock:
+        try:
+            if _ai_client is None:
+                hf_url = current_app.config.get('HF_SPACE_URL').rstrip('/') + "/chat" # type: ignore
+                
+                hf_token = os.getenv("HF_TOKEN") 
+                
+                _ai_client = Client(hf_url, token=hf_token)
+            
+            result = _ai_client.predict(message=message, api_name="/chat_streaming")
+            return {"status": "success", "reply": str(result)}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+@chat_bp.route('/ask-ai-admin', methods=['POST'])
+@admin_required
+def ask_ai_admin(current_user):
+    data = request.get_json()
+    return jsonify(get_ai_response(data.get('message')))
+
+@chat_bp.route('/ask-ai', methods=['POST'])
+@jwt_required()
+def ask_ai_user():
+    data = request.get_json()
+    return jsonify(get_ai_response(data.get('message')))

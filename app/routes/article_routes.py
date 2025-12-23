@@ -47,7 +47,9 @@ def get_articles(current_user):
                 'content': a.content,
                 'tags': a.tags,
                 'source_name': a.source_name,
-                'source_url': a.source_url
+                'source_url': a.source_url,
+                'is_ingested': a.is_ingested 
+
             })
 
         return jsonify({

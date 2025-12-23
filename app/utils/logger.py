@@ -1,4 +1,4 @@
-from ..database import db      
+from ..extensions import db
 from ..models import AuditLog   
 
 def record_log(actor_id, target_id, target_type, action, old_val, new_val, description):
