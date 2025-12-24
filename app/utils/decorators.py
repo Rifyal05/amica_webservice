@@ -18,7 +18,10 @@ def token_required(f):
 
         try:
             data = jwt.decode(token, os.environ.get('SECRET_KEY'), algorithms=["HS256"]) # type: ignore
-            current_user = User.query.get(data['user_id'])
+
+            user_id = data.get('sub') or data.get('user_id')
+
+            current_user = User.query.get(user_id)
             if not current_user:
                 return jsonify({'message': 'User not found!'}), 401
         except Exception as e:
@@ -34,7 +37,6 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         token = None
         
-        # Ambil token dari Header
         if 'Authorization' in request.headers:
             parts = request.headers['Authorization'].split()
             if len(parts) == 2:
