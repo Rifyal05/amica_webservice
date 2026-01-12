@@ -1,0 +1,5 @@
+touch app/static/uploads/.gitkeep
+touch app/static/verifications/.gitkeep
+touch app/static/thumbnails/.gitkeep
+touch app/static/reject/.gitkeep
+touch app/static/quarantine/.gitkeep

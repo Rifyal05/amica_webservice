@@ -1,10 +1,9 @@
 from flask import Blueprint, jsonify, request, current_app
 from ..services.user_action_service import UserActionService
-from ..models import User, Connection, Post, db
-from ..models import User, Post, SavedPost
-from ..models import PostLike 
-from flask_jwt_extended import jwt_required, get_jwt_identity # type: ignore
-
+from ..models import User, Connection, Post, db, SavedPost, PostLike
+from flask_jwt_extended import jwt_required, get_jwt_identity 
+from ..services.notif_manager import create_notification
+from ..services.image_moderation_service import image_moderator
 import uuid
 import os
 import jwt
@@ -20,13 +19,31 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def user_to_dict(user):
+    from ..models import Post, Connection
+    
+    def get_only_filename(path):
+        if not path: return None
+        if path.startswith('http'): return path
+        return path.split('/')[-1]
+
+    avatar = get_only_filename(user.avatar_url)
+    banner = get_only_filename(user.banner_url)
+    
+    posts_count = Post.query.filter_by(user_id=user.id, moderation_status='approved').count()
+    followers_count = Connection.query.filter_by(following_id=user.id).count()
+
     return {
         'id': str(user.id), 
         'username': user.username, 
         'display_name': user.display_name,
-        'avatar_url': user.avatar_url,
+        'avatar_url': avatar,
+        'banner_url': banner,
+        'is_verified': user.is_verified,
+        'stats': {
+            'posts': posts_count,
+            'followers': followers_count
+        }
     }
-
 
 @user_bp.route('/update', methods=['PUT'])
 @jwt_required()
@@ -58,23 +75,49 @@ def update_profile():
     if 'avatar' in request.files:
         file = request.files['avatar']
         if file and allowed_file(file.filename):
-            filename = secure_filename(f"avatar_{current_user.id}_{uuid.uuid4().hex[:6]}.{file.filename.rsplit('.', 1)[1]}") # type: ignore
+            file_bytes = file.read()
+            status, reason = image_moderator.predict(file_bytes)
+            
+            if status == "unsafe":
+                return jsonify({
+                    "error": "Gambar avatar mengandung konten tidak aman",
+                    "reason": reason
+                }), 400
+            
+            file.seek(0)
+            filename = secure_filename(f"avatar_{current_user.id}_{uuid.uuid4().hex[:6]}.{file.filename.rsplit('.', 1)[1]}")  # type: ignore
             file.save(os.path.join(upload_folder, filename))
             current_user.avatar_url = filename 
 
     if 'banner' in request.files:
         file = request.files['banner']
         if file and allowed_file(file.filename):
-            filename = secure_filename(f"banner_{current_user.id}_{uuid.uuid4().hex[:6]}.{file.filename.rsplit('.', 1)[1]}") # type: ignore
+            file_bytes = file.read()
+            status, reason = image_moderator.predict(file_bytes)
+            
+            if status == "unsafe":
+                return jsonify({
+                    "error": "Gambar banner mengandung konten tidak aman",
+                    "reason": reason
+                }), 400
+            
+            file.seek(0)
+            filename = secure_filename(f"banner_{current_user.id}_{uuid.uuid4().hex[:6]}.{file.filename.rsplit('.', 1)[1]}")  # type: ignore
             file.save(os.path.join(upload_folder, filename))
-            current_user.banner_url = f"/static/uploads/{filename}"
+            current_user.banner_url = filename
 
     try:
         db.session.commit()
         
         resp_avatar = current_user.avatar_url
         if resp_avatar and not resp_avatar.startswith(('http://', 'https://')):
-            resp_avatar = f"/static/uploads/{resp_avatar}"
+            if 'static/' not in resp_avatar:
+                resp_avatar = f"static/uploads/{resp_avatar}"
+
+        resp_banner = current_user.banner_url
+        if resp_banner and not resp_banner.startswith(('http://', 'https://')):
+            if 'static/' not in resp_banner:
+                resp_banner = f"static/uploads/{resp_banner}"
 
         return jsonify({
             "message": "Profil berhasil diperbarui",
@@ -83,7 +126,8 @@ def update_profile():
                 "username": current_user.username,
                 "bio": current_user.bio,
                 "avatar_url": resp_avatar,
-                "banner_url": current_user.banner_url
+                "banner_url": resp_banner,
+                'is_verified': current_user.is_verified
             }
         }), 200
     except Exception as e:
@@ -98,8 +142,7 @@ def get_user_profile(user_id):
         if token_str.startswith('Bearer '):
             token = token_str.split(" ")[1]
             try:
-
-                data = jwt.decode(token, os.environ.get('SECRET_KEY'), algorithms=["HS256"]) # type: ignore
+                data = jwt.decode(token, os.environ.get('SECRET_KEY'), algorithms=["HS256"])  # type: ignore
                 current_user_id = data.get('sub') 
                 if not current_user_id:
                      current_user_id = data.get('user_id') 
@@ -114,6 +157,49 @@ def get_user_profile(user_id):
     user = User.query.get(target_uuid)
     if not user:
         return jsonify({"error": "User tidak ditemukan"}), 404
+
+    from ..models import BlockedUser, Connection, Post, ProfessionalProfile
+    is_blocked_by_me = False
+    i_am_blocked = False
+
+    if current_user_id:
+        is_blocked_by_me = BlockedUser.query.filter_by(blocker_id=current_user_id, blocked_id=target_uuid).first() is not None
+        i_am_blocked = BlockedUser.query.filter_by(blocker_id=target_uuid, blocked_id=current_user_id).first() is not None
+
+    resp_avatar = user.avatar_url
+    if resp_avatar and not resp_avatar.startswith(('http://', 'https://')):
+        if 'static/' not in resp_avatar:
+            resp_avatar = f"static/uploads/{resp_avatar}"
+
+    resp_banner = user.banner_url
+    if resp_banner and not resp_banner.startswith(('http://', 'https://')):
+        if 'static/' not in resp_banner:
+            resp_banner = f"static/uploads/{resp_banner}"
+
+    if is_blocked_by_me or i_am_blocked:
+        return jsonify({
+            "id": str(user.id),
+            "username": user.username,
+            "display_name": user.display_name,
+            "bio": "Akun tidak tersedia" if i_am_blocked else "Anda telah memblokir akun ini",
+            "avatar_url": resp_avatar,
+            "banner_url": resp_banner,
+            "is_verified": user.is_verified,
+            "stats": {
+                "posts": 0,
+                "followers": 0,
+                "following": 0
+            },
+            "status": {
+                "is_me": False,
+                "is_following": False,
+                "is_saved_posts_public": False,
+                "is_blocked": is_blocked_by_me,
+                "i_am_blocked": i_am_blocked,
+                "is_verified": user.is_verified,
+            },
+            "posts_hidden": True
+        }), 200
 
     posts_count = Post.query.filter_by(user_id=user.id, moderation_status='approved').count()
     followers_count = Connection.query.filter_by(following_id=user.id).count()
@@ -133,19 +219,28 @@ def get_user_profile(user_id):
             if connection:
                 is_following = True
 
-    resp_avatar = user.avatar_url
-    if resp_avatar and not resp_avatar.startswith(('http://', 'https://')):
-        resp_avatar = f"/static/uploads/{resp_avatar}"
+    pro_data = {}
+    if user.is_verified:
+        pro = ProfessionalProfile.query.filter_by(user_id=user.id).first()
+        if pro:
+            pro_data = {
+                "full_name": pro.full_name_with_title,
+                "str_number": pro.str_number,
+                "province": pro.province,
+                "address": pro.practice_address,
+                "schedule": pro.practice_schedule
+            }
 
     is_saved_public = getattr(user, 'is_saved_posts_public', False) 
 
-    return jsonify({
+    res_body = {
         "id": str(user.id),
         "username": user.username,
         "display_name": user.display_name,
         "bio": user.bio or "",
         "avatar_url": resp_avatar,
-        "banner_url": user.banner_url,
+        "banner_url": resp_banner,
+        "is_verified": user.is_verified,
         "stats": {
             "posts": posts_count,
             "followers": followers_count,
@@ -154,9 +249,16 @@ def get_user_profile(user_id):
         "status": {
             "is_me": is_me,
             "is_following": is_following,
-            "is_saved_posts_public": is_saved_public
+            "is_saved_posts_public": is_saved_public,
+            "is_blocked": False,
+            "i_am_blocked": False,
+            "is_verified": user.is_verified,
         }
-    }), 200
+    }
+    
+    res_body.update(pro_data)
+
+    return jsonify(res_body), 200
 
 
 @user_bp.route('/<string:user_id>/follow', methods=['POST'])
@@ -186,21 +288,27 @@ def follow_user(user_id):
 
     try:
         if existing_connection:
-            # UNFOLLOW
             db.session.delete(existing_connection)
             is_following = False
             message = f"Berhenti mengikuti {target_user.username}"
         else:
-            # FOLLOW
             new_connection = Connection(
-                follower_id=current_user.id,  # type: ignore
-                following_id=target_uuid # type: ignore
+                follower_id=current_user.id,   # type: ignore
+                following_id=target_uuid  # type: ignore
             )
             db.session.add(new_connection)
             is_following = True
             message = f"Mulai mengikuti {target_user.username}"
 
         db.session.commit()
+
+        if is_following:
+            create_notification(
+                    recipient_id=target_uuid,     
+                    sender_id=current_user.id,    
+                    type='follow',
+                    reference_id=None             
+                )
 
         return jsonify({
             "message": message,
@@ -287,10 +395,8 @@ def serialize_post(post, current_user_id=None):
     is_saved = False
 
     if current_user_id:
-        
         if PostLike.query.filter_by(user_id=current_user_id, post_id=post.id).first():
             is_liked = True
-        
         if SavedPost.query.filter_by(user_id=current_user_id, post_id=post.id).first():
             is_saved = True
 
@@ -308,7 +414,8 @@ def serialize_post(post, current_user_id=None):
             'id': str(post.author.id),
             'username': post.author.username,
             'display_name': post.author.display_name,
-            'avatar_url': author_avatar
+            'avatar_url': author_avatar,
+            'is_verified': post.author.is_verified,
         }
     }
 
@@ -354,7 +461,6 @@ def get_saved_posts(target_user_id):
         }), 200
 
     except Exception as e:
-        print(f"Error getting saved posts: {e}")
         return jsonify({'success': False, 'message': 'Terjadi kesalahan server'}), 500
 
 @user_bp.route('/settings/privacy/saved-posts', methods=['PATCH'])
@@ -400,10 +506,130 @@ def update_device_id():
         User.query.filter(User.onesignal_player_id == player_id).update({User.onesignal_player_id: None})
         
         user = User.query.get(current_user_id)
-        user.onesignal_player_id = player_id # type: ignore
+        user.onesignal_player_id = player_id  # type: ignore
         db.session.commit()
         
         return jsonify({'message': 'Device ID updated and unified'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+@user_bp.route('/<uuid:user_id>/followers', methods=['GET'])
+@jwt_required()
+def get_user_followers(user_id):
+    current_user_id = get_jwt_identity()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    search_query = request.args.get('q', '').lower()
+
+    query = db.session.query(User).join(Connection, Connection.follower_id == User.id)\
+        .filter(Connection.following_id == user_id)
+
+    if search_query:
+        query = query.filter(
+            db.or_(
+                User.username.ilike(f'%{search_query}%'),
+                User.display_name.ilike(f'%{search_query}%')
+            )
+        )
+
+    paginated_data = query.paginate(page=page, per_page=per_page, error_out=False)  # type: ignore
+
+    results = []
+    for follower in paginated_data.items:
+        is_following_back = Connection.query.filter_by(
+            follower_id=current_user_id,
+            following_id=follower.id
+        ).first() is not None
+
+        avatar = follower.avatar_url
+        if avatar and not avatar.startswith(('http://', 'https://')):
+            if 'static/' not in avatar:
+                avatar = f"static/uploads/{avatar}"
+
+        results.append({
+            "id": str(follower.id),
+            "username": follower.username,
+            "display_name": follower.display_name,
+            "avatar_url": avatar,
+            "is_following": is_following_back,
+            "is_me": str(follower.id) == str(current_user_id),
+            "is_verified": follower.is_verified,
+        })
+            
+    return jsonify({
+        "users": results,
+        "has_next": paginated_data.has_next
+    }), 200
+
+@user_bp.route('/<uuid:user_id>/following', methods=['GET'])
+@jwt_required()
+def get_user_following(user_id):
+    current_user_id = get_jwt_identity()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    search_query = request.args.get('q', '').lower()
+
+    query = db.session.query(User).join(Connection, Connection.following_id == User.id)\
+        .filter(Connection.follower_id == user_id)
+
+    if search_query:
+        query = query.filter(
+            db.or_(
+                User.username.ilike(f'%{search_query}%'),
+                User.display_name.ilike(f'%{search_query}%')
+            )
+        )
+
+    paginated_data = query.paginate(page=page, per_page=per_page, error_out=False)  # type: ignore
+
+    results = []
+    for followed_user in paginated_data.items:
+        is_following = Connection.query.filter_by(
+            follower_id=current_user_id,
+            following_id=followed_user.id
+        ).first() is not None
+
+        avatar = followed_user.avatar_url
+        if avatar and not avatar.startswith(('http://', 'https://')):
+            if 'static/' not in avatar:
+                avatar = f"static/uploads/{avatar}"
+
+        results.append({
+            "id": str(followed_user.id),
+            "username": followed_user.username,
+            "display_name": followed_user.display_name,
+            "avatar_url": avatar,
+            "is_following": is_following,
+            "is_me": str(followed_user.id) == str(current_user_id),
+            "is_verified": followed_user.is_verified,
+        })
+            
+    return jsonify({
+        "users": results,
+        "has_next": paginated_data.has_next
+    }), 200
+
+@user_bp.route('/mutual-friends', methods=['GET'])
+@jwt_required()
+def get_mutual_friends():
+    current_user_id = get_jwt_identity()
+    search_query = request.args.get('q', '').lower()
+
+    following_subquery = db.session.query(Connection.following_id).filter_by(follower_id=current_user_id)
+    followers_subquery = db.session.query(Connection.follower_id).filter_by(following_id=current_user_id)
+    mutual_ids = following_subquery.intersect(followers_subquery)
+
+    query = User.query.filter(User.id.in_(mutual_ids))
+
+    if search_query:
+        query = query.filter(
+            db.or_(
+                User.username.ilike(f'%{search_query}%'),
+                User.display_name.ilike(f'%{search_query}%')
+            )
+        )
+
+    users = query.limit(50).all()
+    return jsonify([user_to_dict(u) for u in users]), 200

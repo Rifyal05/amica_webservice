@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Amica AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white font-sans h-screen flex flex-col items-center justify-center p-4">
+
+    <div x-data="chatApp()" x-cloak class="w-full max-w-2xl h-[85vh] bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-700">
+        
+        <!-- Header -->
+        <div class="p-4 bg-gray-900 border-b border-gray-700 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center font-bold text-lg">A</div>
+                <div>
+                    <h2 class="font-bold text-purple-400">Amica AI</h2>
+                    <p class="text-xs text-green-500 flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span> Online
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-gray-800">
+            <template x-for="(msg, index) in messages" :key="index">
+                <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                    <div :class="msg.role === 'user' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-100 border border-gray-600'"
+                         class="max-w-[85%] px-4 py-2 rounded-2xl shadow-sm leading-relaxed text-sm whitespace-pre-wrap">
+                        <span x-text="msg.content"></span>
+                    </div>
+                </div>
+            </template>
+            <!-- Typing Indicator -->
+            <div x-show="isLoading && !isStreaming" class="flex justify-start">
+                <div class="bg-gray-700 px-4 py-2 rounded-2xl animate-pulse text-gray-400 text-xs italic">
+                    Amica sedang berpikir...
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-gray-900 border-t border-gray-700">
+            <form @submit.prevent="sendMessage" class="flex space-x-2">
+                <input 
+                    type="text" 
+                    x-model="input" 
+                    :disabled="isLoading"
+                    placeholder="Tanyakan sesuatu pada Amica..." 
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500 transition disabled:opacity-50"
+                >
+                <button 
+                    type="submit" 
+                    :disabled="isLoading || !input.trim()"
+                    class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-3 rounded-xl font-semibold transition disabled:opacity-50"
+                >
+                    <svg x-show="!isLoading" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                    </svg>
+                    <div x-show="isLoading" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function chatApp() {
+            return {
+                messages: [{ role: 'ai', content: 'Halo Ayah/Bunda! Ada yang bisa Amica bantu hari ini?' }],
+                input: '',
+                isLoading: false,
+                isStreaming: false,
+
+                async sendMessage() {
+                    const text = this.input.trim();
+                    if (!text) return;
+
+                    this.messages.push({ role: 'user', content: text });
+                    this.input = '';
+                    this.isLoading = true;
+                    this.isStreaming = false;
+
+                    const aiMsgIndex = this.messages.push({ role: 'ai', content: '' }) - 1;
+                    this.scrollToBottom();
+
+                    try {
+                        const response = await fetch('/api/chats/ask-ai-stream', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ message: text })
+                        });
+
+                        if (!response.ok) throw new Error('Gagal menghubungi server');
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        this.isStreaming = true;
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            
+                            const chunk = decoder.decode(value, { stream: true });
+                            this.messages[aiMsgIndex].content += chunk;
+                            this.scrollToBottom();
+                        }
+                    } catch (err) {
+                        this.messages[aiMsgIndex].content = "Maaf Ayah/Bunda, Amica sedang mengalami gangguan koneksi.";
+                        console.error(err);
+                    } finally {
+                        this.isLoading = false;
+                        this.isStreaming = false;
+                    }
+                },
+
+                scrollToBottom() {
+                    this.$nextTick(() => {
+                        const container = document.getElementById('chat-box');
+                        container.scrollTop = container.scrollHeight;
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

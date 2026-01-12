@@ -3,7 +3,7 @@ from ..models import Comment, Post, User
 from ..extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.post_classification_service import post_classifier
-import uuid
+from ..services.notif_manager import create_notification
 
 comment_bp = Blueprint('comment', __name__)
 
@@ -39,13 +39,14 @@ def create_comment(post_id):
         rejected_comment = Comment(
             post_id=post_id, # type: ignore
             user_id=current_user.id, # type: ignore
-            parent_comment_id=parent_comment_id, # type: ignore
-            text=text, # type: ignore
-            moderation_status=moderation_status, # type: ignore
-            moderation_details=moderation_details # type: ignore
+            parent_comment_id=parent_comment_id,# type: ignore
+            text=text,# type: ignore
+            moderation_status=moderation_status,# type: ignore
+            moderation_details=moderation_details# type: ignore
         )
         db.session.add(rejected_comment)
         db.session.commit()
+        
         
         return jsonify({
             "message": "Comment rejected by moderation filter.",
@@ -55,15 +56,23 @@ def create_comment(post_id):
 
     new_comment = Comment(
         post_id=post_id, # type: ignore
-        user_id=current_user.id, # type: ignore
-        parent_comment_id=parent_comment_id, # type: ignore
-        text=text, # type: ignore
-        moderation_status=moderation_status # type: ignore
+        user_id=current_user.id,# type: ignore
+        parent_comment_id=parent_comment_id,# type: ignore
+        text=text,# type: ignore
+        moderation_status=moderation_status# type: ignore
     )
     
     db.session.add(new_comment)
     post.comments_count += 1 
     db.session.commit()
+
+    create_notification(
+        recipient_id=post.user_id,    
+        sender_id=current_user.id,     
+        type='comment',
+        reference_id=str(post.id),     
+        text=text                      
+    )
 
     return jsonify({
         "message": "Comment created successfully",
@@ -108,7 +117,38 @@ def serialize_comment(comment):
             'id': str(comment.user.id),
             'username': comment.user.username,
             'display_name': comment.user.display_name,
-            'avatar_url': avatar
+            'avatar_url': avatar,
+            'is_verified': comment.user.is_verified
+
         },
         'replies': replies
     }
+
+
+@comment_bp.route('/<uuid:comment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_comment(comment_id):
+    user_id = get_jwt_identity()
+    comment = Comment.query.get(comment_id)
+    
+    if not comment:
+        return jsonify({"error": "Komentar tidak ditemukan"}), 404
+        
+    post = Post.query.get(comment.post_id)
+    is_post_owner = str(post.user_id) == user_id if post else False
+    is_comment_owner = str(comment.user_id) == user_id
+    
+    if not is_comment_owner and not is_post_owner:
+        return jsonify({"error": "Anda tidak memiliki izin untuk menghapus komentar ini"}), 403
+
+    try:
+        db.session.delete(comment)
+        
+        if post and post.comments_count > 0:
+            post.comments_count -= 1 
+
+        db.session.commit()
+        return jsonify({"message": "Komentar berhasil dihapus"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Gagal menghapus komentar", "details": str(e)}), 500

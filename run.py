@@ -15,8 +15,9 @@ if __name__ == '__main__':
         amica_app_obj, 
         host='0.0.0.0', 
         port=5000, 
-        debug=True,
-        use_reloader=False
+        debug=False,
+        use_reloader=False,
+        # log_output=True
     )
 
 # NOTES(pengingat) = gunicorn -k gevent -w 1 run:amica_app_obj

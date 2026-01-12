@@ -1,10 +1,9 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from app.services.ai_service import AIService
 from app.utils.decorators import admin_required
 
-
-
 ai_bp = Blueprint('admin_ai', __name__, url_prefix='/admin/ai')
+chat_bp = Blueprint('api_chats', __name__, url_prefix='/api/chats')
 
 @ai_bp.route('/ingest-auto', methods=['POST'])
 @admin_required
@@ -29,3 +28,11 @@ def sync_cloud(current_user):
     result = AIService.sync_to_cloud()
     status_code = 200 if result.get('status') == 'success' else 500
     return jsonify(result), status_code
+
+@chat_bp.route('/ask-ai-admin', methods=['POST'])
+@admin_required
+def ask_ai_admin(current_user):
+    data = request.get_json()
+    message = data.get('message', '')
+    reply = AIService.chat_with_cloud(message)
+    return jsonify({"status": "success", "reply": reply})

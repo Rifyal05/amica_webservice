@@ -143,7 +143,9 @@ def login():
             "email": user.email,
             "auth_provider": user.auth_provider,
             "google_uid": user.google_uid,
-            "has_pin": bool(user.security_pin_hash)
+            "has_pin": bool(user.security_pin_hash),
+            "is_verified": user.is_verified,
+
         }
     }), 200
 
@@ -179,7 +181,9 @@ def verify_pin():
                     "email": user.email,
                     "auth_provider": user.auth_provider, 
                     "google_uid": user.google_uid,       
-                    "has_pin": bool(user.security_pin_hash)
+                    "has_pin": bool(user.security_pin_hash),
+                    "is_verified": user.is_verified,
+
                 }
             }), 200
         else:
@@ -280,7 +284,9 @@ def google_login():
                 "email": user.email,
                 "auth_provider": user.auth_provider, 
                 "google_uid": user.google_uid,       
-                "has_pin": bool(user.security_pin_hash)
+                "has_pin": bool(user.security_pin_hash),
+                # "is_verified": user.is_verified,
+
             }
         }), 200
 
@@ -316,14 +322,14 @@ def google_user_login():
             unique_username = f"{base_username}_{secrets.token_hex(3)}"
 
             user = User(
-                id=uuid.uuid4(),# type: ignore
-                email=google_email,# type: ignore
-                username=unique_username,# type: ignore
+                id=uuid.uuid4(), # type: ignore
+                email=google_email, # type: ignore
+                username=unique_username, # type: ignore
                 display_name=display_name, # type: ignore
                 password_hash=None, # type: ignore
-                avatar_url=avatar_url,# type: ignore
-                auth_provider='google',# type: ignore
-                google_uid=google_uid,# type: ignore
+                avatar_url=avatar_url, # type: ignore
+                auth_provider='google', # type: ignore
+                google_uid=google_uid, # type: ignore
                 role='user' # type: ignore
             )
             db.session.add(user)
@@ -336,6 +342,14 @@ def google_user_login():
             if not user.google_uid:
                 user.google_uid = google_uid
                 db.session.commit()
+
+        if user.security_pin_hash:
+            return jsonify({
+                'status': 'pin_required', 
+                'temp_id': str(user.id),
+                'email': user.email,
+                'needs_password_set': needs_password_set
+            }), 200
 
         access_token = create_access_token(identity=str(user.id))
         refresh_token = create_refresh_token(identity=str(user.id))
@@ -350,7 +364,12 @@ def google_user_login():
                 "username": user.username,
                 "email": user.email,
                 "display_name": user.display_name,
-                "avatar_url": user.avatar_url
+                "avatar_url": user.avatar_url,
+                "role": user.role,
+                "auth_provider": user.auth_provider,
+                "has_pin": False,
+                "is_verified": user.is_verified,
+
             }
         }), 200
 
@@ -384,7 +403,9 @@ def get_current_user_profile():
                 "email": user.email,
                 "auth_provider": user.auth_provider,
                 "google_uid": user.google_uid,
-                "has_pin": bool(user.security_pin_hash)
+                "has_pin": bool(user.security_pin_hash),
+                "is_verified": user.is_verified,
+
             }
         }), 200
         
@@ -526,3 +547,68 @@ def logout_device():
         user.onesignal_player_id = None
         db.session.commit()
     return jsonify({"message": "Device ID cleared"}), 200
+
+@auth_bp.route('/set-pin', methods=['POST'])
+@jwt_required()
+def set_pin():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    data = request.get_json()
+    new_pin = data.get('pin')
+    
+    if not new_pin or len(new_pin) < 6: 
+        return jsonify({"error": "Format PIN tidak valid"}), 400
+
+    hashed_pin = bcrypt.generate_password_hash(new_pin).decode('utf-8')
+    
+    user.security_pin_hash = hashed_pin # type: ignore
+    db.session.commit()
+    
+    return jsonify({"message": "PIN keamanan berhasil diaktifkan/diubah"}), 200
+
+auth_bp.route('/remove-pin', methods=['POST'])
+@jwt_required()
+def remove_pin():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    data = request.get_json()
+    current_pin = data.get('current_pin') 
+    
+    if not user.security_pin_hash: # type: ignore
+        return jsonify({"message": "PIN memang belum aktif"}), 200
+
+    if not current_pin or not bcrypt.check_password_hash(user.security_pin_hash, current_pin): # type: ignore
+        return jsonify({"error": "PIN salah, gagal menonaktifkan."}), 400
+    
+    user.security_pin_hash = None # type: ignore
+    db.session.commit()
+    
+    return jsonify({"message": "PIN keamanan berhasil dinonaktifkan"}), 200
+
+@auth_bp.route('/reset-pin-by-otp', methods=['POST'])
+def reset_pin_by_otp():
+    data = request.get_json()
+    email = data.get('email')
+    otp = data.get('otp')
+    new_pin = data.get('new_pin')
+    
+    user = User.query.filter_by(email=email).first()
+    
+    if not user or user.reset_otp != otp:
+        return jsonify({"error": "Sesi tidak valid/OTP salah"}), 400
+        
+    if new_pin:
+        hashed = bcrypt.generate_password_hash(new_pin).decode('utf-8')
+        user.security_pin_hash = hashed
+        msg = "PIN baru berhasil diatur. Silakan login."
+    else:
+        user.security_pin_hash = None 
+        msg = "PIN berhasil dihapus. Silakan login tanpa PIN."
+
+    user.reset_otp = None
+    user.reset_otp_expires = None
+    db.session.commit()
+    
+    return jsonify({"message": msg}), 200

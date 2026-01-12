@@ -1,17 +1,98 @@
 <div x-show="currentView === 'reports'" x-transition.opacity x-cloak>
-    <h2 class="text-2xl font-bold mb-6">Pusat Laporan</h2>
-     <div class="space-y-4">
-        <template x-for="report in filteredReports" :key="report.id">
-            <div class="bg-white dark:bg-[#161b22] p-4 rounded-xl border border-gray-200 dark:border-white/5 flex flex-col md:flex-row gap-4 justify-between">
-                <div>
-                    <p class="font-bold text-sm" x-text="report.target_type + ': ' + report.target_content"></p>
-                    <p class="text-xs text-red-500" x-text="report.reason"></p>
+    
+    <!-- Header & Tabs -->
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <h2 class="text-2xl font-bold">Pusat Laporan</h2>
+        
+        <!-- Tab Navigation -->
+        <div class="flex bg-gray-100 dark:bg-white/5 p-1 rounded-lg">
+            <button @click="setReportTab('post')" 
+                :class="activeReportTab === 'post' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium rounded-md transition-all">
+                Postingan
+            </button>
+            <button @click="setReportTab('comment')" 
+                :class="activeReportTab === 'comment' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium rounded-md transition-all">
+                Komentar
+            </button>
+            <button @click="setReportTab('user')" 
+                :class="activeReportTab === 'user' ? 'bg-white dark:bg-gray-700 shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium rounded-md transition-all">
+                Pengguna
+            </button>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div x-show="reports.length === 0" class="text-center py-20 text-gray-500">
+        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <p>Tidak ada laporan tertunda untuk kategori ini.</p>
+    </div>
+
+    <!-- Reports Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <template x-for="group in reports" :key="group.target_id">
+            <div class="bg-white dark:bg-[#161b22] rounded-xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+                
+                <!-- Card Header: Badge Count -->
+                <div class="p-4 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-white/5">
+                    <span class="px-2 py-1 text-xs font-bold rounded bg-red-100 text-red-600 border border-red-200"
+                          x-text="group.report_count + ' Laporan'"></span>
+                    <span class="text-xs text-gray-500" x-text="group.reasons[0] || 'Unspecified'"></span>
                 </div>
-                <div class="flex gap-2">
-                    <button @click="resolveReport(report.id, 'dismissed')" class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Abaikan</button>
-                    <button @click="openSuspendModal(report)" class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Tindak</button>
+
+                <!-- Content Preview (Dynamic based on Type) -->
+                <div class="p-4 flex-1">
+                    
+                    <!-- CASE: POST -->
+                    <template x-if="group.target_type === 'post'">
+                        <div class="space-y-3">
+                            <div class="aspect-video w-full bg-gray-100 rounded-lg overflow-hidden relative">
+                                <img :src="getAvatarUrl(group.preview.image_url)" class="w-full h-full object-cover">
+                            </div>
+                            <p class="text-sm line-clamp-2 italic text-gray-600 dark:text-gray-300" x-text="'&quot;' + group.preview.caption + '&quot;'"></p>
+                            <p class="text-xs text-gray-400">Oleh: <span x-text="group.preview.author"></span></p>
+                        </div>
+                    </template>
+
+                    <!-- CASE: COMMENT -->
+                    <template x-if="group.target_type === 'comment'">
+                        <div class="space-y-3">
+                            <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg text-sm text-gray-700 dark:text-gray-300">
+                                <span class="font-bold block mb-1" x-text="group.preview.author"></span>
+                                <span x-text="group.preview.text"></span>
+                            </div>
+                            <div class="text-xs text-gray-400 flex items-center gap-2">
+                                <span>Pada Post:</span>
+                                <span class="truncate max-w-[150px]" x-text="group.preview.context_caption"></span>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- CASE: USER -->
+                    <template x-if="group.target_type === 'user'">
+                        <div class="flex items-center gap-4">
+                            <img :src="getAvatarUrl(group.preview.avatar_url)" class="w-12 h-12 rounded-full border">
+                            <div>
+                                <p class="font-bold text-sm" x-text="group.preview.display_name"></p>
+                                <p class="text-xs text-gray-500" x-text="'@' + group.preview.username"></p>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-xs bg-gray-50 p-2 rounded border border-gray-100 dark:bg-white/5 dark:border-white/5" x-text="group.preview.bio || 'Tidak ada bio'"></div>
+                    </template>
+
+                </div>
+
+                <!-- Action Button -->
+                <div class="p-4 border-t border-gray-100 dark:border-white/5">
+                    <button @click="openEvidence(group)" 
+                            class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        Lihat & Tindak
+                    </button>
                 </div>
             </div>
         </template>
-     </div>
+    </div>
 </div>

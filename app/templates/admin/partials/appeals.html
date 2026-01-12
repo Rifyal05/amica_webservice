@@ -1,0 +1,64 @@
+<div x-show="currentView === 'appeals'" x-transition x-cloak>
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold">Banding Moderasi</h1>
+        <p class="text-gray-500 dark:text-gray-400 text-sm">Review postingan yang ditolak oleh AI dan diajukan banding oleh pengguna.</p>
+    </div>
+
+    <div class="grid gap-6">
+        <template x-for="app in appeals" :key="app.id">
+            <div class="bg-white dark:bg-[#161b22] rounded-xl border border-gray-200 dark:border-white/5 overflow-hidden shadow-sm">
+                <div class="p-6 flex flex-col md:flex-row gap-6">
+                    <div class="w-full md:w-48 h-48 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden shrink-0 border dark:border-white/10">
+                        <img x-show="app.post_image" :src="'/static/reject/' + app.post_image" class="w-full h-full object-cover">
+                        <div x-show="!app.post_image" class="w-full h-full flex items-center justify-center text-gray-400">
+                            <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-blue-500" x-text="'@' + app.username"></span>
+                                <span class="text-xs text-gray-500" x-text="app.created_at"></span>
+                            </div>
+                            <span class="px-2 py-1 bg-yellow-500/10 text-yellow-500 text-[10px] font-bold uppercase rounded">Pending Review</span>
+                        </div>
+
+                        <div>
+                            <p class="text-xs font-bold text-gray-400 uppercase mb-1">Caption Postingan:</p>
+                            <p class="text-sm italic" x-text="app.post_caption"></p>
+                        </div>
+
+                        <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-100 dark:border-blue-800/30">
+                            <p class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-1">Alasan Banding Pengguna:</p>
+                            <p class="text-sm font-medium" x-text="app.justification"></p>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="(val, key) in app.moderation_details" :key="key">
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20" 
+                                      x-text="key + ': ' + val"></span>
+                            </template>
+                        </div>
+
+                        <div class="flex gap-3 pt-2">
+                            <button @click="processAppeal(app, 'approved')" 
+                                    class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg transition shadow-lg shadow-green-500/20">
+                                Terima Banding
+                            </button>
+                            <button @click="processAppeal(app, 'rejected')" 
+                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition shadow-lg shadow-red-500/20">
+                                Tolak Banding
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <div x-show="appeals.length === 0" class="py-20 text-center bg-white dark:bg-[#161b22] rounded-xl border border-dashed border-gray-300 dark:border-white/10">
+            <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <p class="text-gray-500">Tidak ada pengajuan banding saat ini.</p>
+        </div>
+    </div>
+</div>

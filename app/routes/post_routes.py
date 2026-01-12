@@ -6,7 +6,7 @@ from ..services.image_moderation_service import image_moderator
 from ..services.post_services import toggle_save_post 
 import uuid
 import os
-import jwt
+from ..services.notif_manager import create_notification
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone 
 
@@ -36,16 +36,14 @@ def create_post():
     MAX_CAPTION_LENGTH = 2500
     if len(caption) > MAX_CAPTION_LENGTH:
         return jsonify({"error": f"Caption tidak boleh lebih dari {MAX_CAPTION_LENGTH} karakter"}), 400
+
     text_category = post_classifier.predict(caption)
-    if text_category not in ALLOWED_TEXT_CATEGORIES:
-        return jsonify({
-            "error": "Post rejected by text moderation",
-            "reason": f"Detected category: {text_category}"
-        }), 403
+    text_is_unsafe = text_category not in ALLOWED_TEXT_CATEGORIES
 
     image_url_to_save = None
+    image_is_unsafe = False
     moderation_details = {
-        'text_status': 'safe',
+        'text_status': 'unsafe' if text_is_unsafe else 'safe',
         'text_category': text_category
     }
 
@@ -54,42 +52,58 @@ def create_post():
             return jsonify({"error": "Invalid image file type"}), 400
         
         image_bytes = image_file.read()
-        
         image_status, image_category = image_moderator.predict(image_bytes)
+        image_is_unsafe = (image_status == 'unsafe')
         
-        if image_status == 'unsafe':
-            return jsonify({
-                "error": "Post rejected by image moderation",
-                "reason": f"Detected category: {image_category}"
-            }), 403
-
         filename = secure_filename(f"{uuid.uuid4().hex}_{image_file.filename}")
-        upload_folder = os.path.join(current_app.root_path, 'static', 'uploads')
-        os.makedirs(upload_folder, exist_ok=True)
-        image_path = os.path.join(upload_folder, filename)
         
-        with open(image_path, 'wb') as f:
+        target_folder = 'reject' if (image_is_unsafe or text_is_unsafe) else 'uploads'
+        upload_path = os.path.join(current_app.root_path, 'static', target_folder)
+        os.makedirs(upload_path, exist_ok=True)
+        
+        with open(os.path.join(upload_path, filename), 'wb') as f:
             f.write(image_bytes)
             
-        image_url_to_save = f"/static/uploads/{filename}"
-        moderation_details['image_status'] = 'safe'
-    
+        image_url_to_save = filename
+        moderation_details['image_status'] = image_status
+        moderation_details['image_category'] = image_category
+
     new_post = Post()
     new_post.user_id = current_user.id
     new_post.caption = caption
     new_post.tags = tags
     new_post.image_url = image_url_to_save
     new_post.moderation_details = moderation_details
-    new_post.moderation_status = 'approved' 
     
+    if text_is_unsafe or image_is_unsafe:
+        new_post.moderation_status = 'rejected'
+        db.session.add(new_post)
+        db.session.commit()
+
+        create_notification(
+            recipient_id=current_user.id, 
+            sender_id=current_user.id,    
+            type='post_rejected',        
+            reference_id=str(new_post.id),
+            text="Postingan Anda ditolak karena melanggar aturan komunitas."
+        )
+        
+        return jsonify({
+            "message": "Postingan ditolak oleh moderasi otomatis, Anda dapat mengajukan banding di menu Pengaturan.",
+            "post_id": str(new_post.id),
+            "status": "rejected"
+        }), 200
+    
+    new_post.moderation_status = 'approved' 
     db.session.add(new_post)
     db.session.commit()
 
     return jsonify({
         "message": "Post created successfully", 
         "post_id": str(new_post.id),
-        "moderation_feedback": moderation_details
+        "status": "approved"
     }), 201
+
 
 @post_bp.route('/', methods=['GET'])
 @jwt_required(optional=True) 
@@ -104,6 +118,14 @@ def get_posts():
     query = db.session.query(Post, User)\
         .join(User, Post.user_id == User.id)\
         .filter(Post.moderation_status == 'approved')
+    
+    if current_user_id:
+        from ..models import BlockedUser
+        blocked_users = BlockedUser.query.filter_by(blocker_id=current_user_id).all()
+        blocked_ids = [b.blocked_id for b in blocked_users]
+        if blocked_ids:
+            query = query.filter(Post.user_id.notin_(blocked_ids))
+
 
     if target_user_id:
         try:
@@ -188,7 +210,9 @@ def get_posts():
                 "display_name": post_author.display_name,
                 "username": post_author.username,
                 "avatar_url": avatar_url,
-                "is_following": is_following
+                "is_following": is_following,
+                "is_verified": post_author.is_verified,
+
             }
         })
     
@@ -229,6 +253,15 @@ def toggle_like(post_id):
             liked = True
         
         db.session.commit()
+        
+        if liked:
+            create_notification(
+                recipient_id=post.user_id,
+                sender_id=current_user.id,
+                type='like',
+                reference_id=str(post.id)
+            )
+
         return jsonify({
             "message": "Success",
             "liked": liked,
@@ -274,3 +307,176 @@ def save_post(post_id):
     is_saved = toggle_save_post(current_user.id, post_id)
     message = "Postingan disimpan" if is_saved else "Postingan dihapus dari simpanan"
     return jsonify({"success": True, "is_saved": is_saved, "message": message}), 200
+
+
+@post_bp.route('/detail/<uuid:post_id>', methods=['GET'])
+@jwt_required(optional=True)
+def get_single_post(post_id):
+    current_user_id = get_jwt_identity()
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
+    post_author = User.query.get(post.user_id)
+
+    from app.models import Appeal
+    from datetime import timedelta
+
+    appeal = Appeal.query.filter_by(content_id=post.id).first()
+    is_liked = False
+    is_following = False
+    is_saved = False
+    if current_user_id:
+        if PostLike.query.filter_by(user_id=current_user_id, post_id=post.id).first():
+            is_liked = True
+        if SavedPost.query.filter_by(user_id=current_user_id, post_id=post.id).first():
+            is_saved = True
+        if str(post_author.id) != str(current_user_id):# type: ignore
+            follow_exists = Connection.query.filter_by(
+                follower_id=current_user_id,
+                following_id=post_author.id# type: ignore
+            ).first()
+            if follow_exists:
+                is_following = True
+    image_url = post.image_url
+    if image_url and not image_url.startswith('http'):
+        folder = 'reject' if post.moderation_status in ['rejected', 'appealing', 'final_rejected'] else 'uploads'
+        image_url = f"static/{folder}/{image_url}"
+    avatar_url = post_author.avatar_url# type: ignore
+    if avatar_url and not avatar_url.startswith('http'):
+        avatar_url = f"static/uploads/{avatar_url}"
+    dt = post.created_at
+    if dt is not None:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        created_at_str = dt.isoformat().replace('+00:00', 'Z')
+    else:
+        created_at_str = datetime.now(timezone.utc).isoformat()
+    result = {
+        "id": str(post.id),
+        "caption": post.caption,
+        "tags": post.tags if post.tags else [],
+        "image_url": image_url,
+        "created_at": created_at_str,
+        "likes_count": post.likes_count,
+        "comments_count": post.comments_count,
+        "is_liked": is_liked,
+        "is_saved": is_saved,
+        "status": post.moderation_status,
+        "moderation_details": post.moderation_details,
+        "expires_at": (post.created_at + timedelta(hours=24)).isoformat(),
+        "appeal_status": appeal.status if appeal else None,
+        "admin_note": appeal.admin_note if appeal else None,
+        "author": {
+            "id": str(post_author.id),# type: ignore
+            "display_name": post_author.display_name, # type: ignore
+            "username": post_author.username,# type: ignore
+            "avatar_url": avatar_url,
+            "is_following": is_following,
+            "is_verified": post_author.is_verified,# type: ignore
+        }
+    }
+    return jsonify(result), 200
+
+@post_bp.route('/my-moderation', methods=['GET'])
+@jwt_required()
+def get_my_moderation():
+    user_id = get_jwt_identity()
+    posts = Post.query.filter(
+        Post.user_id == user_id, 
+        Post.moderation_status.notin_(['approved'])
+    ).order_by(Post.created_at.desc()).all()
+    
+    results = []
+    for p in posts:
+        from app.models import Appeal
+        from datetime import timedelta
+        appeal = Appeal.query.filter_by(content_id=p.id).first()
+        
+        image_path = p.image_url
+        if image_path:
+            folder = 'reject' if p.moderation_status in ['rejected', 'appealing', 'final_rejected'] else 'uploads'
+            image_path = f"static/{folder}/{image_path}"
+
+        results.append({
+            "id": str(p.id),
+            "caption": p.caption,
+            "image_url": image_path,
+            "status": p.moderation_status,
+            "moderation_details": p.moderation_details,
+            "expires_at": (p.created_at + timedelta(hours=24)).isoformat(),
+            "appeal_status": appeal.status if appeal else None,
+            "admin_note": appeal.admin_note if appeal else None
+        })
+    return jsonify(results), 200
+
+
+@post_bp.route('/<uuid:post_id>/appeal', methods=['POST'])
+@jwt_required()
+def submit_appeal(post_id):
+    user_id = get_jwt_identity()
+    post = Post.query.filter_by(id=post_id, user_id=user_id).first()
+    
+    if not post:
+        return jsonify({"error": "Postingan tidak ditemukan"}), 404
+    
+    if post.moderation_status != 'rejected':
+        return jsonify({"error": "Postingan ini tidak dalam status ditolak"}), 400
+
+    data = request.get_json()
+    justification = data.get('justification')
+    
+    if not justification:
+        return jsonify({"error": "Alasan banding wajib diisi"}), 400
+
+    from app.models import Appeal
+    existing_appeal = Appeal.query.filter_by(content_id=post_id).first()
+    if existing_appeal:
+        return jsonify({"error": "Banding sudah diajukan"}), 400
+
+    new_appeal = Appeal(
+        user_id=user_id, # type: ignore
+        content_type='post', # type: ignore
+        content_id=post_id, # type: ignore
+        justification=justification, # type: ignore
+        status='pending' # type: ignore
+    )
+    
+    post.moderation_status = 'appealing'
+    db.session.add(new_appeal)
+    db.session.commit()
+    
+    return jsonify({"message": "Banding berhasil diajukan, mohon tunggu review admin"}), 201
+
+
+@post_bp.route('/<uuid:post_id>/acknowledge', methods=['DELETE'])
+@jwt_required()
+def acknowledge_rejection(post_id):
+    user_id = get_jwt_identity()
+    post = Post.query.filter_by(id=post_id, user_id=user_id).first()
+    
+    if not post:
+        return jsonify({"error": "Postingan tidak ditemukan"}), 404
+        
+    if post.moderation_status not in ['rejected', 'appealing', 'final_rejected']:
+        return jsonify({"error": "Postingan ini tidak dalam masa moderasi atau sudah selesai."}), 400
+
+    try:
+        if post.image_url:
+            reject_folder = os.path.join(current_app.root_path, 'static', 'reject')
+            path = os.path.join(reject_folder, post.image_url)
+            
+            if os.path.exists(path):
+                os.remove(path)
+        
+        from app.models import Appeal
+        Appeal.query.filter_by(content_id=post.id).delete()
+        
+        db.session.delete(post)
+        db.session.commit()
+        
+        return jsonify({"message": "Postingan berhasil dihapus dan keputusan diterima."}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500

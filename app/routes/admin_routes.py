@@ -9,6 +9,10 @@ from ..utils.decorators import admin_required
 from ..utils.logger import record_log 
 from ..routes.auth_routes import bcrypt
 from firebase_admin import auth as firebase_auth
+from ..services.notif_manager import create_notification
+import shutil
+from sqlalchemy import func, desc
+from ..models import QuarantinedItem
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -325,44 +329,91 @@ def delete_user_by_admin(current_user, user_id):
 @admin_required
 def get_reports(current_user):
     try:
-        reports = db.session.query(Report, User).join(User, Report.reporter_user_id == User.id)\
-            .filter(Report.status == 'pending')\
-            .order_by(Report.created_at.desc()).all()
+        filter_type = request.args.get('type', 'post')
         
-        data = []
-        for r, reporter in reports:
-            target_type = "Unknown"
-            target_content = "Konten tidak ditemukan"
-            target_user_id = None
+        query = db.session.query(Report, User).join(User, Report.reporter_user_id == User.id)\
+            .filter(Report.status == 'pending')
+
+        if filter_type == 'post':
+            query = query.filter(Report.reported_post_id.isnot(None))
+        elif filter_type == 'comment':
+            query = query.filter(Report.reported_comment_id.isnot(None))
+        elif filter_type == 'user':
+            query = query.filter(Report.reported_user_id.isnot(None))
+        
+        raw_reports = query.order_by(Report.created_at.desc()).all()
+
+        grouped_data = {}
+
+        for r, reporter in raw_reports:
+            target_id = None
+            if filter_type == 'post': 
+                target_id = str(r.reported_post_id)
+            elif filter_type == 'comment': 
+                target_id = str(r.reported_comment_id)
+            elif filter_type == 'user': 
+                target_id = str(r.reported_user_id)
             
-            if r.reported_user_id:
-                target_type = "User"
-                target_user = User.query.get(r.reported_user_id)
-                target_content = f"Akun: {target_user.username}" if target_user else "User dihapus"
-                if target_user: target_user_id = target_user.id
+            if not target_id: continue
 
-            elif r.reported_post_id:
-                target_type = "Post"
-                post = Post.query.get(r.reported_post_id)
-                target_content = f"Caption: {post.caption[:50]}..." if post else "Post dihapus"
-                if post: target_user_id = post.user_id
+            if target_id not in grouped_data:
+                content_preview = {}
+                
+                if filter_type == 'post':
+                    post = Post.query.get(target_id)
+                    if post:
+                        content_preview = {
+                            'caption': post.caption,
+                            'image_url': post.image_url,
+                            'author': post.author.username if post.author else "Unknown",
+                            'author_id': str(post.user_id)
+                        }
+                elif filter_type == 'comment':
+                    comment = Comment.query.get(target_id)
+                    if comment:
+                        parent_post = Post.query.get(comment.post_id)
+                        content_preview = {
+                            'text': comment.text,
+                            'author': comment.user.username if comment.user else "Unknown",
+                            'author_id': str(comment.user_id),
+                            'context_image': parent_post.image_url if parent_post else None,
+                            'context_caption': parent_post.caption if parent_post else "Post dihapus"
+                        }
+                elif filter_type == 'user':
+                    user = User.query.get(target_id)
+                    if user:
+                        content_preview = {
+                            'username': user.username,
+                            'display_name': user.display_name,
+                            'avatar_url': user.avatar_url,
+                            'banner_url': user.banner_url,
+                            'bio': user.bio
+                        }
 
-            elif r.reported_comment_id:
-                target_type = "Comment"
-                comment = Comment.query.get(r.reported_comment_id)
-                target_content = f"Komentar: {comment.text[:50]}..." if comment else "Komentar dihapus"
-                if comment: target_user_id = comment.user_id
+                grouped_data[target_id] = {
+                    'target_id': target_id,
+                    'target_type': filter_type,
+                    'report_count': 0,
+                    'preview': content_preview,
+                    'reasons': [], 
+                    'reporters': [], 
+                    'latest_report_id': r.id
+                }
 
-            data.append({
-                'id': r.id,
-                'reporter': reporter.username,
-                'reason': r.reason,
-                'target_type': target_type,
-                'target_content': target_content,
-                'target_user_id': target_user_id,
-                'created_at': r.created_at.strftime('%Y-%m-%d %H:%M')
-            })
-        return jsonify(data)
+            group = grouped_data[target_id]
+            group['report_count'] += 1
+            
+            if r.reason not in group['reasons']:
+                group['reasons'].append(r.reason)
+            
+            if len(group['reporters']) < 3:
+                group['reporters'].append(reporter.username)
+
+        final_list = list(grouped_data.values())
+        final_list.sort(key=lambda x: x['report_count'], reverse=True)
+
+        return jsonify(final_list)
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -800,5 +851,325 @@ def revert_activity(current_user, log_id):
 
         return jsonify({'message': 'Perubahan berhasil dibatalkan (Reverted).'})
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+
+import shutil
+
+@admin_bp.route('/appeals', methods=['GET'])
+@admin_required
+def get_appeals(current_user):
+    try:
+        from ..models import Appeal, Post, User
+        appeals = db.session.query(Appeal, User).join(User, Appeal.user_id == User.id)\
+            .filter(Appeal.status == 'pending')\
+            .order_by(Appeal.created_at.desc()).all()
+        
+        data = []
+        for app, user in appeals:
+            post = Post.query.get(app.content_id)
+            data.append({
+                'id': app.id,
+                'user_id': str(user.id),
+                'username': user.username,
+                'justification': app.justification,
+                'content_type': app.content_type,
+                'content_id': str(app.content_id),
+                'post_caption': post.caption if post else "Post dihapus",
+                'post_image': post.image_url if post else None,
+                'moderation_details': post.moderation_details if post else {},
+                'created_at': app.created_at.strftime('%Y-%m-%d %H:%M')
+            })
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/appeals/<int:appeal_id>/action', methods=['POST'])
+@admin_required
+def handle_appeal_action(current_user, appeal_id):
+    try:
+        from ..models import Appeal, Post
+        app = Appeal.query.get(appeal_id)
+        if not app: return jsonify({'error': 'Banding tidak ditemukan'}), 404
+        
+        data = request.get_json()
+        action = data.get('action') 
+        admin_note = data.get('admin_note', '')
+
+        post = Post.query.get(app.content_id)
+        if not post:
+            db.session.delete(app)
+            db.session.commit()
+            return jsonify({'error': 'Konten terkait sudah tidak ada'}), 404
+
+        reject_folder = os.path.join(current_app.root_path, 'static', 'reject')
+        upload_folder = os.path.join(current_app.root_path, 'static', 'uploads')
+        filename = post.image_url
+
+        if action == 'approved':
+            if filename:
+                src = os.path.join(reject_folder, filename)
+                dst = os.path.join(upload_folder, filename)
+                if os.path.exists(src):
+                    shutil.move(src, dst)
+            post.moderation_status = 'approved'
+            app.status = 'approved'
+            notif_type = 'appeal_approved'
+        else:
+            if filename:
+                path = os.path.join(reject_folder, filename)
+                if os.path.exists(path):
+                    os.remove(path)
+            post.moderation_status = 'final_rejected'
+            post.image_url = None
+            app.status = 'rejected'
+            notif_type = 'appeal_rejected'
+
+        app.admin_note = admin_note
+        app.reviewed_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        create_notification(
+            recipient_id=app.user_id,
+            sender_id=current_user.id,
+            type=notif_type,
+            reference_id=str(app.id),
+            text=admin_note
+        )
+
+        return jsonify({'message': 'Keputusan berhasil dikirim'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+def move_file_to_quarantine(filename):
+    if not filename: return None
+    
+    upload_folder = os.path.join(current_app.root_path, 'static/uploads')
+    quarantine_folder = os.path.join(current_app.root_path, 'static/quarantine')
+    
+    if not os.path.exists(quarantine_folder):
+        os.makedirs(quarantine_folder)
+        
+    src = os.path.join(upload_folder, filename)
+    
+    ext = filename.split('.')[-1]
+    safe_name = f"{uuid.uuid4().hex}.{ext}"
+    dst = os.path.join(quarantine_folder, safe_name)
+    
+    if os.path.exists(src):
+        shutil.move(src, dst)
+        return safe_name
+    return None
+
+@admin_bp.route('/reports/action/quarantine-post', methods=['POST'])
+@admin_required
+def action_quarantine_post(current_user):
+    try:
+        data = request.get_json()
+        post_id = data.get('target_id')
+        reason = data.get('reason', 'Melanggar Pedoman Komunitas')
+
+        post = Post.query.get(post_id)
+        if not post: return jsonify({'error': 'Post tidak ditemukan'}), 404
+
+        quarantine_path = None
+        if post.image_url:
+            quarantine_path = move_file_to_quarantine(post.image_url)
+
+        q_item = QuarantinedItem(
+            original_target_id=post.id, # type: ignore
+            target_type='post', # type: ignore
+            file_path=quarantine_path, # type: ignore
+            text_content=post.caption, # type: ignore
+            quarantined_by=current_user.id, # type: ignore
+            reason=reason # type: ignore
+        )
+        db.session.add(q_item)
+
+        post.image_url = None
+        post.moderation_status = 'quarantined'
+        post.caption = "[Konten ini telah dihapus oleh Tim Admin karena melanggar pedoman komunitas]"
+        
+        Report.query.filter_by(reported_post_id=post.id, status='pending')\
+            .update({Report.status: 'resolved'})
+
+        db.session.commit()
+
+        create_notification(
+            recipient_id=post.user_id,
+            sender_id=current_user.id,
+            type='post_rejected',
+            reference_id=str(post.id),
+            text=f"Postingan Anda dihapus: {reason}"
+        )
+
+        return jsonify({'message': 'Post berhasil dikarantina dan laporan diselesaikan.'})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# --- ACTION: DISMISS (ABAIKAN LAPORAN) ---
+@admin_bp.route('/reports/action/dismiss-group', methods=['POST'])
+@admin_required
+def action_dismiss_group(current_user):
+    try:
+        data = request.get_json()
+        target_id = data.get('target_id')
+        target_type = data.get('target_type') 
+
+        query = Report.query.filter_by(status='pending')
+
+        if target_type == 'post':
+            query = query.filter_by(reported_post_id=target_id)
+        elif target_type == 'comment':
+            query = query.filter_by(reported_comment_id=target_id)
+        elif target_type == 'user':
+            query = query.filter_by(reported_user_id=target_id)
+        
+        # Update massal
+        count = query.update({Report.status: 'dismissed'})
+        db.session.commit()
+
+        return jsonify({'message': f'{count} laporan diabaikan. Konten dianggap aman.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/reports/action/delete-comment', methods=['POST'])
+@admin_required
+def action_delete_comment(current_user):
+    try:
+        data = request.get_json()
+        comment_id = data.get('target_id')
+        reason = data.get('reason', 'Spam/Toxic')
+
+        comment = Comment.query.get(comment_id)
+        if not comment: return jsonify({'error': 'Komentar tidak ditemukan'}), 404
+
+        target_user_id = comment.user_id 
+        
+        db.session.add(QuarantinedItem(
+            original_target_id=comment.id, # type: ignore
+            target_type='comment', # type: ignore
+            text_content=comment.text, # type: ignore
+            quarantined_by=current_user.id, # type: ignore
+            reason=reason # type: ignore
+        ))
+
+        db.session.query(Report).filter(Report.reported_comment_id == comment_id).update({
+            Report.reported_comment_id: None,
+            Report.status: 'resolved'
+        }, synchronize_session=False)
+
+        db.session.delete(comment)
+        
+        db.session.commit()
+
+        create_notification(
+            recipient_id=target_user_id,
+            sender_id=current_user.id,
+            type='system',
+            text=f"Komentar Anda dihapus karena melanggar aturan: {reason}"
+        )
+
+        return jsonify({'message': 'Komentar berhasil dihapus.'})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR DELETE COMMENT: {e}") 
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/reports/action/sanitize-user', methods=['POST'])
+@admin_required
+def action_sanitize_user(current_user):
+    try:
+        data = request.get_json()
+        user_id = data.get('target_id')
+        fields = data.get('fields', []) 
+        reason = data.get('reason', 'Profil tidak pantas')
+
+        target_user = User.query.get(user_id)
+        if not target_user: return jsonify({'error': 'User tidak ditemukan'}), 404
+
+        actions_taken = []
+
+        if 'avatar' in fields and target_user.avatar_url:
+            q_path = move_file_to_quarantine(target_user.avatar_url)
+            db.session.add(QuarantinedItem(
+                original_target_id=target_user.id, target_type='user_avatar', # type: ignore
+                file_path=q_path, quarantined_by=current_user.id, reason=reason # type: ignore
+            ))
+            target_user.avatar_url = None
+            actions_taken.append("Avatar direset")
+
+        if 'banner' in fields and target_user.banner_url:
+            q_path = move_file_to_quarantine(target_user.banner_url)
+            db.session.add(QuarantinedItem(
+                original_target_id=target_user.id, target_type='user_banner', # type: ignore
+                file_path=q_path, quarantined_by=current_user.id, reason=reason # type: ignore
+            ))
+            target_user.banner_url = None
+            actions_taken.append("Banner direset")
+
+        if 'bio' in fields:
+            db.session.add(QuarantinedItem(
+                original_target_id=target_user.id, target_type='user_bio', # type: ignore
+                text_content=target_user.bio, quarantined_by=current_user.id, reason=reason # type: ignore
+            ))
+            target_user.bio = ""
+            actions_taken.append("Bio dibersihkan")
+
+        if 'display_name' in fields:
+            old_name = target_user.display_name
+            target_user.display_name = "Amica User"
+            actions_taken.append(f"Nama diubah dari {old_name}")
+
+        if 'username' in fields:
+            old_username = target_user.username
+            random_suffix = uuid.uuid4().hex[:8]
+            new_username = f"user_{random_suffix}"
+            target_user.username = new_username
+            actions_taken.append(f"Username acak: {new_username}")
+
+        Report.query.filter_by(reported_user_id=target_user.id, status='pending')\
+            .update({Report.status: 'resolved'})
+
+        db.session.commit()
+
+        create_notification(
+            recipient_id=target_user.id, sender_id=current_user.id, type='system', 
+            text=f"Profil Anda disesuaikan Admin: {', '.join(actions_taken)}."
+        )
+
+        return jsonify({'message': 'Sanitasi berhasil.', 'details': actions_taken})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+    
+
+@admin_bp.route('/quarantine-list', methods=['GET'])
+@admin_required
+def get_quarantine_list(current_user):
+    try:
+        items = QuarantinedItem.query.order_by(QuarantinedItem.created_at.desc()).all()
+        data = []
+        for item in items:
+            admin = User.query.get(item.quarantined_by)
+            data.append({
+                'id': str(item.id),
+                'target_type': item.target_type,
+                'file_path': item.file_path,
+                'text_content': item.text_content,
+                'reason': item.reason,
+                'admin_name': admin.username if admin else "System",
+                'created_at': item.created_at.strftime('%d %b %Y, %H:%M')
+            })
+        return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -24,7 +24,9 @@ class User(db.Model):
     security_pin_hash = db.Column(db.String(128), nullable=True)
     is_saved_posts_public = db.Column(db.Boolean, default=False)
     reset_otp = db.Column(db.String(6), nullable=True)
-    reset_otp_expires = db.Column(db.DateTime(timezone=True), nullable=True) 
+    reset_otp_expires = db.Column(db.DateTime(timezone=True), nullable=True)
+    is_verified = db.Column(db.Boolean, default=False)
+ 
 
 
 class Post(db.Model):
@@ -98,6 +100,9 @@ class Article(db.Model):
     source_url = db.Column(db.String(1024), nullable=True, unique=True, index=True)
     is_featured = db.Column(db.Boolean, default=False)
     author_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
+    views = db.Column(db.Integer, default=0)
+    author = db.relationship('User', backref=db.backref('articles', lazy=True))
+ 
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_ingested = db.Column(db.Boolean, default=False)
@@ -156,8 +161,11 @@ class Appeal(db.Model):
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     content_type = db.Column(db.String(20), nullable=False)
     content_id = db.Column(UUID(as_uuid=True), nullable=False)
+    justification = db.Column(db.Text)
+    admin_note = db.Column(db.Text)
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    reviewed_at = db.Column(db.DateTime(timezone=True))
 
 class Chat(db.Model):
     __tablename__ = 'chats'
@@ -171,15 +179,26 @@ class Chat(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     participants = db.relationship('ChatParticipant', backref='chat', cascade="all, delete-orphan", lazy=True)
     messages = db.relationship('Message', backref='chat', cascade="all, delete-orphan", lazy='dynamic')
+    allow_member_invites = db.Column(db.Boolean, default=False)
+
 
 class ChatParticipant(db.Model):
     __tablename__ = 'chat_participants'
     chat_id = db.Column(UUID(as_uuid=True), db.ForeignKey('chats.id', ondelete='CASCADE'), primary_key=True)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    is_hidden = db.Column(db.Boolean, default=False)
     is_admin = db.Column(db.Boolean, default=False)
     unread_count = db.Column(db.Integer, default=0)
     joined_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    user = db.relationship('User', backref='chat_participations')
+    last_cleared_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    user = db.relationship('User', backref='chat_participations') 
+
+
+class GroupBannedUser(db.Model):
+    __tablename__ = 'group_banned_users'
+    group_id = db.Column(UUID(as_uuid=True), db.ForeignKey('chats.id', ondelete='CASCADE'), primary_key=True)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    banned_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Message(db.Model):
     __tablename__ = 'messages'
@@ -191,8 +210,12 @@ class Message(db.Model):
     attachment_url = db.Column(db.String(1024), nullable=True)
     is_read_by_all = db.Column(db.Boolean, default=False)
     sent_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    is_deleted = db.Column(db.Boolean, default=False)
+    reply_to_id = db.Column(UUID(as_uuid=True), db.ForeignKey('messages.id'), nullable=True)
+    
     sender = db.relationship('User', foreign_keys=[sender_id])
-
+    reply_to = db.relationship('Message', remote_side=[id], backref='replies')
+    
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
 
@@ -207,3 +230,143 @@ class AuditLog(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     actor = db.relationship('User', foreign_keys=[actor_id])
+
+
+class BotChat(db.Model):
+    __tablename__ = 'bot_chats'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    
+    # Relasi
+    user = db.relationship('User', backref=backref('bot_chats', cascade="all, delete-orphan"))
+    messages = db.relationship('BotMessage', backref='bot_chat', cascade="all, delete-orphan", lazy='dynamic')
+
+class BotMessage(db.Model):
+    __tablename__ = 'bot_messages'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    bot_chat_id = db.Column(UUID(as_uuid=True), db.ForeignKey('bot_chats.id', ondelete='CASCADE'), nullable=False)
+    role = db.Column(db.String(20), nullable=False) # 'user' atau 'model'
+    content = db.Column(db.Text, nullable=False)
+    sent_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    sources = db.Column(JSONB, nullable=True)
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    recipient_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    sender_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    
+    type = db.Column(db.String(20), nullable=False) 
+    
+    reference_id = db.Column(db.String(36), nullable=True) 
+    
+    text = db.Column(db.String(255), nullable=True)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    recipient = db.relationship('User', foreign_keys=[recipient_id], backref='notifications_received')
+    sender = db.relationship('User', foreign_keys=[sender_id], backref='notifications_sent')
+
+    def to_dict(self):
+        from flask import url_for
+        from app.utils.image_utils import generate_thumbnail
+
+        related_image = None
+        
+        if self.type in ['like', 'comment'] and self.reference_id:
+            from .models import Post
+            try:
+                post = Post.query.filter_by(id=self.reference_id).first()
+                if post and post.image_url:
+                    thumb_path = generate_thumbnail(post.image_url, size=(128, 128))
+                    
+                    if thumb_path:
+                        related_image = url_for('static', filename=thumb_path, _external=True)
+                    else:
+                        related_image = url_for('static', filename=f"uploads/{post.image_url}", _external=True)
+            except:
+                pass
+
+        return {
+            'id': str(self.id),
+            'recipient_id': str(self.recipient_id),
+            'sender_id': str(self.sender_id),
+            'sender_name': self.sender.username if self.sender else "Unknown",
+            'sender_avatar': self.sender.avatar_url if self.sender else None,
+            'sender_is_verified': self.sender.is_verified if self.sender else False,
+            'type': self.type,
+            'reference_id': self.reference_id,
+            'text': self.text,
+            'is_read': self.is_read,
+            'related_image_url': related_image,
+            'created_at': self.created_at.isoformat()
+        }
+    
+
+
+class GroupInvite(db.Model):
+    __tablename__ = 'group_invites'
+    token = db.Column(db.String(64), primary_key=True)
+    group_id = db.Column(UUID(as_uuid=True), db.ForeignKey('chats.id', ondelete='CASCADE'), nullable=False)
+    created_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True) # Null = selamanya
+    max_uses = db.Column(db.Integer, nullable=True) # Null = tak terbatas
+    current_uses = db.Column(db.Integer, default=0)
+
+
+class ProfessionalProfile(db.Model):
+    __tablename__ = 'professional_profiles'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), unique=True)
+    
+    pro_type = db.Column(db.String(50), default='psychologist') 
+    full_name_with_title = db.Column(db.String(255))
+    str_number = db.Column(db.String(50), unique=True)
+    province = db.Column(db.String(100))
+    practice_address = db.Column(db.Text)
+    practice_schedule = db.Column(db.Text)
+    
+    str_image_path = db.Column(db.String(1024)) 
+    ktp_image_path = db.Column(db.String(1024), nullable=True) 
+    selfie_image_path = db.Column(db.String(1024), nullable=True) 
+    
+    status = db.Column(db.String(20), default='pending') 
+    verified_at = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    user = db.relationship("User", backref=db.backref("professional_profile", uselist=False))
+
+
+
+class QuarantinedItem(db.Model):
+    __tablename__ = 'quarantined_items'
+    
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # ID asli dari Post, User, atau Comment yang ditindak
+    original_target_id = db.Column(UUID(as_uuid=True), nullable=False)
+    
+    # Tipe target: 'post', 'comment', 'user_avatar', 'user_banner', 'user_bio'
+    target_type = db.Column(db.String(50), nullable=False)
+    
+    # Lokasi file di folder 'static/quarantine/' (Jika berupa gambar)
+    file_path = db.Column(db.String(1024), nullable=True)
+    
+    # Isi teks asli (Jika yang dihapus adalah komentar/bio)
+    text_content = db.Column(db.Text, nullable=True)
+    
+    # Siapa admin yang melakukan eksekusi
+    quarantined_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=True)
+    
+    # Alasan tindakan (diambil dari input admin saat delete)
+    reason = db.Column(db.Text, nullable=True)
+    
+    # Waktu tindakan (untuk cron job penghapusan otomatis 30 hari)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relasi ke Admin (opsional, untuk audit)
+    admin = db.relationship('User', foreign_keys=[quarantined_by])

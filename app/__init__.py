@@ -1,5 +1,7 @@
 import os
-from flask import Flask 
+import fcntl
+from flask import Flask, request
+from flask_apscheduler import APScheduler
 from .config import Config
 from .extensions import db, bcrypt, jwt, mail, socketio
 from .routes.auth_routes import auth_bp, bcrypt
@@ -18,26 +20,28 @@ from .routes.chat_routes import chat_bp
 from flask_jwt_extended import JWTManager 
 from .routes.password_routes import password_bp
 from flask_mail import Mail
-from .routes.password_routes import password_bp 
-
+from app.routes.bot_routes import bot_bp
+from .routes.notification_routes import notif_bp
+from .routes.web_routes import web_bp 
+from .routes.professional_routes import pro_bp
+from .routes.admin_pro_routes import admin_pro_bp
+from .routes.discover_routes import discover_bp
 
 mail = Mail()
-
+scheduler = APScheduler()
 
 def create_app():
     flask_instance = Flask(__name__)
     flask_instance.config.from_object(Config)
+    
     from .models import User, Chat, ChatParticipant, Message 
 
     JWTManager(flask_instance) 
     db.init_app(flask_instance)
     bcrypt.init_app(flask_instance)
     socketio.init_app(flask_instance)
-
     mail.init_app(flask_instance)
-
-
-    # Register Blueprint 
+    
     flask_instance.register_blueprint(auth_bp, url_prefix='/api/auth')
     flask_instance.register_blueprint(post_bp, url_prefix='/api/posts')
     flask_instance.register_blueprint(sdq_bp, url_prefix='/api/sdq')
@@ -52,7 +56,20 @@ def create_app():
     flask_instance.register_blueprint(admin_bp, url_prefix='/admin')
     flask_instance.register_blueprint(chat_bp, url_prefix='/api/chats')
     flask_instance.register_blueprint(password_bp, url_prefix='/api/password')
+    flask_instance.register_blueprint(bot_bp, url_prefix='/api/bot')
+    flask_instance.register_blueprint(notif_bp, url_prefix='/api/notifications')
+    flask_instance.register_blueprint(web_bp) 
+    flask_instance.register_blueprint(pro_bp, url_prefix='/api/pro')
+    flask_instance.register_blueprint(admin_pro_bp)
+    flask_instance.register_blueprint(discover_bp, url_prefix='/api/discover')
 
+    flask_instance.config['MAIL_DEBUG'] = False
+
+    @flask_instance.after_request
+    def add_header(response):
+        if request.path.startswith('/static/'):
+            response.headers['Cache-Control'] = 'public, max-age=31536000'
+        return response
 
     @flask_instance.context_processor
     def inject_firebase_config():
@@ -66,5 +83,23 @@ def create_app():
         })
     
     from . import socket_events 
-        
+
+    if not flask_instance.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        f = open("scheduler.lock", "wb")
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            scheduler.init_app(flask_instance)
+            scheduler.start()
+            
+            from app.tasks import cleanup_moderation_task
+            scheduler.add_job(
+                id='cleanup_rejected_posts',
+                func=cleanup_moderation_task,
+                args=[flask_instance],
+                trigger='interval',
+                hours=1
+            )
+        except BlockingIOError:
+            pass
+
     return flask_instance

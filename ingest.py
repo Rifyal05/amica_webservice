@@ -3,7 +3,7 @@ import re
 import json
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter # type: ignore
 
 load_dotenv()
 DB_URL = os.getenv("DATABASE_URL")

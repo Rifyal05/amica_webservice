@@ -8,10 +8,10 @@ function ragLogic() {
         isWaitMode: false,
         countdown: 0,
         progressMessage: 'Siap sinkronisasi',
-
         chatInput: '',
         chatHistory: [],
         isChatLoading: false,
+        statusInfo: '',
 
         async fetchRagStats() {
             const res = await this.authFetch('/admin/ai/stats');
@@ -24,16 +24,11 @@ function ragLogic() {
 
         renderMarkdown(text) {
             if (!text) return '';
-
             return text
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-900 dark:text-white">$1</strong>')
-
                 .replace(/(^|[^\*])\*([^\* \s][^\*]*?[^\* \s])\*(?=[^\*]|$)/g, '$1<em class="italic">$2</em>')
-
                 .replace(/^\* /gm, '• ')
-
                 .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-400 underline font-bold hover:text-blue-300 transition-colors">$1</a>')
-
                 .replace(/\n/g, '<br>');
         },
 
@@ -45,7 +40,6 @@ function ragLogic() {
 
         async startAutoIngest() {
             if (this.ragStats.remaining === 0) return this.showToast('Info', 'Semua data lokal sudah siap.', 'success');
-
             this.askConfirm('Mulai Proses Lokal?', `Memproses ${this.ragStats.remaining} artikel ke dataset JSONL.`, async () => {
                 this.isSyncing = true;
                 this.loopIngest();
@@ -58,7 +52,6 @@ function ragLogic() {
                 const res = await this.authFetch('/admin/ai/ingest-auto', { method: 'POST' });
                 this.ragStats.remaining = res.remaining;
                 this.ragStats.ingested = res.total_ingested;
-
                 if (res.status === 'done') {
                     this.isSyncing = false;
                     this.progressMessage = 'Proses Lokal Selesai!';
@@ -100,47 +93,73 @@ function ragLogic() {
             const userMsg = this.chatInput;
             this.chatHistory.push({ role: 'user', text: userMsg });
             this.chatInput = '';
-            this.isChatLoading = true;
+            this.isChatLoading = true; // Menyalakan animasi bounce di bubble
+            this.statusInfo = '';
 
-            this.$nextTick(() => {
-                const container = document.getElementById('chatContainer');
-                if (container) container.scrollTop = container.scrollHeight;
-            });
+            const container = document.getElementById('chatContainer');
+            this.$nextTick(() => { if (container) container.scrollTop = container.scrollHeight; });
 
             try {
-                const response = await fetch('/api/chats/ask-ai-admin', {
+                const response = await fetch('/api/bot/ask-admin', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.token}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
                     body: JSON.stringify({ message: userMsg })
                 });
 
-                const data = await response.json();
-                this.isChatLoading = false;
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let firstChunkReceived = false;
+                let msgIndex = -1;
 
-                if (data.status === 'success') {
-                    const fullText = data.reply;
-                    const msgIndex = this.chatHistory.push({ role: 'amica', text: '' }) - 1;
+                let charBuffer = [];
+                let isTyping = false;
 
-                    let i = 0;
-                    const typeWriter = () => {
-                        if (i < fullText.length) {
-                            this.chatHistory[msgIndex].text += fullText.charAt(i);
-                            i++;
+                const processBuffer = () => {
+                    if (charBuffer.length > 0) {
+                        isTyping = true;
+                        this.chatHistory[msgIndex].text += charBuffer.shift();
+                        if (container) container.scrollTop = container.scrollHeight;
+                        setTimeout(processBuffer, 5);
+                    } else {
+                        isTyping = false;
+                    }
+                };
 
-                            const container = document.getElementById('chatContainer');
-                            if (container) container.scrollTop = container.scrollHeight;
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                            setTimeout(typeWriter, 10);
-                        } else {
-                            this.chatHistory = [...this.chatHistory];
-                        }
-                    };
-                    typeWriter();
+                    const chunk = decoder.decode(value, { stream: true });
 
-                } else { throw new Error(data.message); }
+                    if (chunk.includes("[STATUS:QUEUED]")) {
+                        this.statusInfo = "Semua server penuh, mengantri slot...";
+                        continue;
+                    }
+                    if (chunk.includes("[STATUS:WAITING_LIST]")) {
+                        this.statusInfo = "Slot didapat! Menunggu giliran proses AI...";
+                        continue;
+                    }
+                    if (chunk.includes("[STATUS:PROCESSING]")) {
+                        this.statusInfo = "Slot kosong ditemukan! Amica sedang berpikir...";
+                        continue;
+                    }
+                    if (chunk === "[HEARTBEAT]") continue;
+
+                    if (!firstChunkReceived) {
+                        this.isChatLoading = false;
+                        this.statusInfo = "Amica sedang mengetik...";
+                        msgIndex = this.chatHistory.push({ role: 'amica', text: '' }) - 1;
+                        firstChunkReceived = true;
+                    }
+
+                    for (let char of chunk) {
+                        charBuffer.push(char);
+                    }
+                    if (!isTyping) processBuffer();
+                }
+
+                // Hilangkan status setelah selesai mengetik
+                setTimeout(() => { this.statusInfo = ""; }, 2000);
 
             } catch (e) {
                 this.isChatLoading = false;

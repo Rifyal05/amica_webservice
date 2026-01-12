@@ -30,3 +30,12 @@ def get_user_saved_posts(target_user_id, current_user_id):
     ).order_by(SavedPost.saved_at.desc()).all()
 
     return saved_posts, "Sukses"
+
+def get_post_by_id_service(post_id):
+    """Mengambil satu post beserta data authornya"""
+    try:
+        post = db.session.query(Post).join(User).filter(Post.id == post_id).first()
+        return post
+    except Exception as e:
+        print(f"Error fetching post: {e}")
+        return None

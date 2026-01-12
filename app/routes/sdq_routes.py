@@ -62,3 +62,23 @@ def get_sdq_history(current_user):
         })
 
     return jsonify(results), 200
+
+
+@sdq_bp.route('/results/<int:result_id>', methods=['GET'])
+@token_required
+def get_sdq_detail(current_user, result_id):
+    result = SdqResult.query.filter_by(id=result_id, user_id=current_user.id).first()
+    
+    if not result:
+        return jsonify({"error": "Hasil tidak ditemukan"}), 404
+
+    calculated_scores = sdq_scorer.calculate_scores(result.answers)
+
+    full_interpretation = interpreter.generate_full_interpretation(calculated_scores)
+
+    response_payload = {
+        "scores": calculated_scores,
+        "interpretation": full_interpretation
+    }
+    
+    return jsonify(response_payload), 200
