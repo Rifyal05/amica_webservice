@@ -13,22 +13,20 @@ instance/
 
 .env
 
-/app/static/uploads/
-/app/static/verifications/
-/app/static/thumbnails/
-/app/static/reject/
+app/static/uploads/*
+!app/static/uploads/.gitkeep
 
-/app/static/uploads/
-!/app/static/uploads/.gitkeep
-/app/static/quarantine/
-!/app/static/quarantine/.gitkeep
-/app/static/verifications/
-!/app/static/verifications/.gitkeep
-/app/static/thumbnails/
-!/app/static/thumbnails/.gitkeep
-/app/static/reject/
-!/app/static/reject/.gitkeep
+app/static/verifications/*
+!app/static/verifications/.gitkeep
 
+app/static/thumbnails/*
+!app/static/thumbnails/.gitkeep
+
+app/static/reject/*
+!app/static/reject/.gitkeep
+
+app/static/quarantine/*
+!app/static/quarantine/.gitkeep
 *.joblib
 *.pkl
 alembic/.versions.cache

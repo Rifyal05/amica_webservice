@@ -191,8 +191,10 @@ class ChatParticipant(db.Model):
     unread_count = db.Column(db.Integer, default=0)
     joined_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     last_cleared_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    user = db.relationship('User', backref='chat_participations') 
-
+    user = db.relationship(
+        'User', 
+        backref=db.backref('chat_participations', cascade="all, delete-orphan", passive_deletes=True)
+    )
 
 class GroupBannedUser(db.Model):
     __tablename__ = 'group_banned_users'
