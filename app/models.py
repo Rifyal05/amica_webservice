@@ -26,6 +26,16 @@ class User(db.Model):
     reset_otp = db.Column(db.String(6), nullable=True)
     reset_otp_expires = db.Column(db.DateTime(timezone=True), nullable=True)
     is_verified = db.Column(db.Boolean, default=False)
+
+    # Relationships with cascade delete to prevent NotNullViolation
+    posts = db.relationship('Post', backref=db.backref('author', lazy=True), cascade="all, delete-orphan", passive_deletes=True)
+    comments = db.relationship('Comment', backref=db.backref('author', lazy=True), cascade="all, delete-orphan", passive_deletes=True)
+    articles = db.relationship('Article', backref=db.backref('author', lazy=True), cascade="all, delete-orphan", passive_deletes=True)
+    feedback = db.relationship('Feedback', backref=db.backref('author', lazy=True), cascade="all, delete-orphan", passive_deletes=True)
+    sdq_results = db.relationship('SdqResult', backref=db.backref('author', lazy=True), cascade="all, delete-orphan", passive_deletes=True)
+    reports_made = db.relationship('Report', foreign_keys='Report.reporter_user_id', backref='reporter', cascade="all, delete-orphan", passive_deletes=True)
+    reports_received = db.relationship('Report', foreign_keys='Report.reported_user_id', backref='reported_user', cascade="all, delete-orphan", passive_deletes=True)
+    appeals = db.relationship('Appeal', backref=db.backref('author', lazy=True), cascade="all, delete-orphan", passive_deletes=True)
  
 
 
@@ -41,7 +51,6 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     likes_count = db.Column(db.Integer, default=0)
     comments_count = db.Column(db.Integer, default=0)
-    author = db.relationship('User', backref=backref('posts', lazy=True))
 
 
 class Comment(db.Model):
@@ -55,7 +64,7 @@ class Comment(db.Model):
     moderation_status = db.Column(db.String(20), default='approved')
     moderation_details = db.Column(JSONB)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    user = db.relationship('User', backref='comments')
+    
     replies = db.relationship(
         'Comment',
         backref=db.backref('parent', remote_side=[id]),
@@ -99,9 +108,8 @@ class Article(db.Model):
     source_name = db.Column(db.String(100))
     source_url = db.Column(db.String(1024), nullable=True, unique=True, index=True)
     is_featured = db.Column(db.Boolean, default=False)
-    author_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
+    author_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'))
     views = db.Column(db.Integer, default=0)
-    author = db.relationship('User', backref=db.backref('articles', lazy=True))
  
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -148,9 +156,9 @@ class Report(db.Model):
     __tablename__ = 'reports'
     id = db.Column(db.Integer, primary_key=True)
     reporter_user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    reported_user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
-    reported_post_id = db.Column(UUID(as_uuid=True), db.ForeignKey('posts.id'))
-    reported_comment_id = db.Column(UUID(as_uuid=True), db.ForeignKey('comments.id'))
+    reported_user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'))
+    reported_post_id = db.Column(UUID(as_uuid=True), db.ForeignKey('posts.id', ondelete='CASCADE'))
+    reported_comment_id = db.Column(UUID(as_uuid=True), db.ForeignKey('comments.id', ondelete='CASCADE'))
     reason = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -173,7 +181,7 @@ class Chat(db.Model):
     is_group = db.Column(db.Boolean, default=False)
     name = db.Column(db.String(100), nullable=True)
     image_url = db.Column(db.String(1024), nullable=True)
-    created_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=True)
+    created_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     last_message_text = db.Column(db.Text, nullable=True)
     last_message_time = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -213,7 +221,7 @@ class Message(db.Model):
     is_read_by_all = db.Column(db.Boolean, default=False)
     sent_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_deleted = db.Column(db.Boolean, default=False)
-    reply_to_id = db.Column(UUID(as_uuid=True), db.ForeignKey('messages.id'), nullable=True)
+    reply_to_id = db.Column(UUID(as_uuid=True), db.ForeignKey('messages.id', ondelete='SET NULL'), nullable=True)
     
     sender = db.relationship('User', foreign_keys=[sender_id])
     reply_to = db.relationship('Message', remote_side=[id], backref='replies')
@@ -222,7 +230,7 @@ class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
 
     id = db.Column(db.Integer, primary_key=True)
-    actor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    actor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     target_id = db.Column(db.String(100), nullable=True) 
     target_type = db.Column(db.String(50)) 
     action = db.Column(db.String(50)) 
@@ -321,7 +329,7 @@ class GroupInvite(db.Model):
     __tablename__ = 'group_invites'
     token = db.Column(db.String(64), primary_key=True)
     group_id = db.Column(UUID(as_uuid=True), db.ForeignKey('chats.id', ondelete='CASCADE'), nullable=False)
-    created_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    created_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True) # Null = selamanya
     max_uses = db.Column(db.Integer, nullable=True) # Null = tak terbatas
@@ -370,7 +378,7 @@ class QuarantinedItem(db.Model):
     text_content = db.Column(db.Text, nullable=True)
     
     # Siapa admin yang melakukan eksekusi
-    quarantined_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=True)
+    quarantined_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     
     # Alasan tindakan (diambil dari input admin saat delete)
     reason = db.Column(db.Text, nullable=True)
