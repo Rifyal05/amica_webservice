@@ -269,8 +269,16 @@ class Notification(db.Model):
     is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    recipient = db.relationship('User', foreign_keys=[recipient_id], backref='notifications_received')
-    sender = db.relationship('User', foreign_keys=[sender_id], backref='notifications_sent')
+    recipient = db.relationship(
+        'User', 
+        foreign_keys=[recipient_id], 
+        backref=db.backref('notifications_received', cascade="all, delete-orphan", passive_deletes=True)
+    )
+    sender = db.relationship(
+        'User', 
+        foreign_keys=[sender_id], 
+        backref=db.backref('notifications_sent', cascade="all, delete-orphan", passive_deletes=True)
+    )
 
     def to_dict(self):
         from flask import url_for
