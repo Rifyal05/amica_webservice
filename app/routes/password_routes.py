@@ -5,10 +5,11 @@ from ..routes.auth_routes import bcrypt
 import random
 import string
 from datetime import datetime, timedelta, timezone
-
+from ..extensions import limiter
 password_bp = Blueprint('password', __name__)
 
 @password_bp.route('/forgot', methods=['POST'])
+@limiter.limit("5 per hour")
 def forgot_password():
     data = request.get_json()
     email = data.get('email', '').lower()
@@ -30,6 +31,7 @@ def forgot_password():
 
 
 @password_bp.route('/verify-otp', methods=['POST'])
+@limiter.limit("15 per hour")
 def verify_otp():
     data = request.get_json()
     email = data.get('email', '').lower()
@@ -47,6 +49,7 @@ def verify_otp():
 
 
 @password_bp.route('/reset', methods=['POST'])
+@limiter.limit("3 per hour")
 def reset_password_finish():
     data = request.get_json()
     email = data.get('email', '').lower()

@@ -1,0 +1,11 @@
+# Gunakan :8080 agar bisa diakses dari IP LAN (HP kamu)
+:8080 {
+    # Matikan HTTPS otomatis untuk lokal biar gak ribet sertifikat
+    # (Di server asli nanti pakai HTTPS otomatis)
+    
+    # Proxy ke Gunicorn
+    reverse_proxy localhost:5000 {
+        # INI KUNCI SOCKET.IO BIAR LANCAR
+        flush_interval -1
+    }
+}

@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template_string, request # <--- Tambah request
 from ..models import Post, User
-
+from ..extensions import limiter
 web_bp = Blueprint('web', __name__)
 
 @web_bp.route('/join/<string:chat_id>')
+@limiter.limit("20 per minute")
 def join_group_redirect(chat_id):
     html_content = f"""
     <!DOCTYPE html>
@@ -16,6 +17,7 @@ def join_group_redirect(chat_id):
 
 
 @web_bp.route('/post/<string:post_id>')
+@limiter.limit("30 per minute")
 def view_post_redirect(post_id):
     base_url = request.host_url.rstrip('/') 
     meta_image = f"{base_url}/static/images/logo_dark.png"

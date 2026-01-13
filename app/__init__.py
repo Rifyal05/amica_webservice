@@ -3,7 +3,6 @@ import fcntl
 from flask import Flask, request
 from flask_apscheduler import APScheduler
 from .config import Config
-from .extensions import db, bcrypt, jwt, mail, socketio
 from .routes.auth_routes import auth_bp, bcrypt
 from .routes.post_routes import post_bp
 from .routes.sdq_routes import sdq_bp
@@ -26,7 +25,8 @@ from .routes.web_routes import web_bp
 from .routes.professional_routes import pro_bp
 from .routes.admin_pro_routes import admin_pro_bp
 from .routes.discover_routes import discover_bp
-
+from flask import jsonify
+from .extensions import db, bcrypt, mail, socketio, limiter
 mail = Mail()
 scheduler = APScheduler()
 
@@ -41,6 +41,8 @@ def create_app():
     bcrypt.init_app(flask_instance)
     socketio.init_app(flask_instance)
     mail.init_app(flask_instance)
+    limiter.init_app(flask_instance) 
+
     
     flask_instance.register_blueprint(auth_bp, url_prefix='/api/auth')
     flask_instance.register_blueprint(post_bp, url_prefix='/api/posts')
@@ -101,5 +103,14 @@ def create_app():
             )
         except BlockingIOError:
             pass
+
+    @flask_instance.errorhandler(429)
+    def ratelimit_handler(e):
+        return jsonify({
+           "error": "Terlalu banyak permintaan",
+            "message": "Tenang ya, server butuh istirahat sejenak. Coba lagi nanti.",
+            "retry_after": e.description
+        }), 429
+
 
     return flask_instance

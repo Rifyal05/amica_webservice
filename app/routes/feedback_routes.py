@@ -3,10 +3,11 @@ from ..models import Feedback, User
 from ..extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.feedback_sentiment_service import feedback_analyzer
-
+from ..extensions import limiter
 feedback_bp = Blueprint('feedback', __name__)
 
 @feedback_bp.route('/', methods=['POST'])
+@limiter.limit("5 per hour")
 @jwt_required() 
 def submit_feedback(): 
     user_id = get_jwt_identity()

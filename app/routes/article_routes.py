@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from ..models import db, Article, User
 from ..utils.decorators import admin_required
 from ..utils.logger import record_log 
+from ..extensions import db, limiter 
 
 article_bp = Blueprint('article_admin', __name__, url_prefix='/admin/articles')
 
@@ -20,6 +21,7 @@ def save_article_image(file):
     return unique_filename
 
 @article_bp.route('/', methods=['GET'])
+@limiter.limit("60 per minute")
 @admin_required
 def get_articles(current_user):
     try:
@@ -62,6 +64,7 @@ def get_articles(current_user):
         return jsonify({'error': str(e)}), 500
 
 @article_bp.route('/', methods=['POST'])
+@limiter.limit("5 per minute")
 @admin_required
 def create_article(current_user):
     try:
@@ -125,6 +128,7 @@ def create_article(current_user):
 
 # UPDATE ARTICLE
 @article_bp.route('/<int:id>', methods=['POST']) 
+@limiter.limit("10 per minute")
 @admin_required
 def update_article(current_user, id):
     try:

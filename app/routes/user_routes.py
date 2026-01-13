@@ -8,6 +8,7 @@ import uuid
 import os
 import jwt
 from werkzeug.utils import secure_filename
+from ..extensions import limiter
 
 user_bp = Blueprint('user', __name__) 
 
@@ -46,6 +47,7 @@ def user_to_dict(user):
     }
 
 @user_bp.route('/update', methods=['PUT'])
+@limiter.limit("5 per minute")
 @jwt_required()
 def update_profile():
     user_id = get_jwt_identity()
@@ -135,6 +137,7 @@ def update_profile():
         return jsonify({"error": "Gagal menyimpan perubahan", "details": str(e)}), 500
 
 @user_bp.route('/<string:user_id>', methods=['GET'])
+@limiter.limit("60 per minute")
 def get_user_profile(user_id):
     current_user_id = None
     if 'Authorization' in request.headers:
@@ -262,6 +265,7 @@ def get_user_profile(user_id):
 
 
 @user_bp.route('/<string:user_id>/follow', methods=['POST'])
+@limiter.limit("20 per minute")
 @jwt_required()
 def follow_user(user_id):
     current_user_id = get_jwt_identity()
@@ -366,6 +370,7 @@ def handle_unblock_user(target_uuid):
 
 
 @user_bp.route('/blocked_list', methods=['GET'])
+@limiter.limit("10 per minute")
 @jwt_required()
 def get_blocked_list(): 
     user_id = get_jwt_identity()

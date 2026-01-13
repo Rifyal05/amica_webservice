@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.professional_service import ProfessionalService
+from ..extensions import limiter
 
 pro_bp = Blueprint('professional', __name__, url_prefix='/api/pro')
 pro_service = ProfessionalService()
 
 @pro_bp.route('/apply', methods=['POST'])
+@limiter.limit("3 per hour")
 @jwt_required()
 def apply_professional():
     user_id = get_jwt_identity()
@@ -37,6 +39,7 @@ def approve_pro(pro_id):
 
 
 @pro_bp.route('/update', methods=['PUT'])
+@limiter.limit("10 per hour")
 @jwt_required()
 def update_pro_data():
     user_id = get_jwt_identity()

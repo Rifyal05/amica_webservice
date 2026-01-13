@@ -3,7 +3,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, Chat, ChatParticipant, Message, User, GroupBannedUser, GroupInvite
 from sqlalchemy import desc, func
 from werkzeug.utils import secure_filename
-from ..extensions import socketio
+from ..extensions import socketio, limiter
+
 import uuid
 import os
 import json
@@ -27,6 +28,7 @@ def get_full_url(path):
     return f"{base_url}/{clean_path}"
 
 @chat_bp.route('/inbox', methods=['GET'])
+@limiter.limit("30 per minute")
 @jwt_required()
 def get_inbox():
     user_id = get_jwt_identity()
@@ -130,6 +132,7 @@ def get_or_create_chat(target_user_id):
     return jsonify({"chat_id": str(new_chat.id), "success": True}), 201
 
 @chat_bp.route('/<chat_id>/messages', methods=['GET'])
+@limiter.limit("60 per minute")
 @jwt_required()
 def get_messages(chat_id):
     user_id = get_jwt_identity()
@@ -198,6 +201,7 @@ def get_messages(chat_id):
     return jsonify(results), 200
 
 @chat_bp.route('/group/create', methods=['POST'])
+@limiter.limit("5 per hour")
 @jwt_required()
 def create_group():
     user_id = get_jwt_identity()
@@ -241,6 +245,7 @@ def create_group():
     return jsonify({"success": True, "chat_id": str(new_group.id)}), 201
 
 @chat_bp.route('/group/<uuid:chat_id>/invite', methods=['POST'])
+@limiter.limit("10 per minute")
 @jwt_required()
 def invite_to_group(chat_id):
     sender_id = get_jwt_identity()
@@ -628,6 +633,7 @@ def update_group_settings(chat_id):
     return jsonify({"message": "Pengaturan diperbarui", "allow_member_invites": chat.allow_member_invites}), 200
 
 @chat_bp.route('/group/<uuid:chat_id>/invite-link', methods=['POST'])
+@limiter.limit("10 per minute")
 @jwt_required()
 def generate_invite_link(chat_id):
     current_user_id = get_jwt_identity()

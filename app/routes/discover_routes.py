@@ -1,16 +1,30 @@
 from flask import Blueprint, jsonify, request
+import json 
 from sqlalchemy import func, desc, or_, cast, String, case
 from datetime import datetime, timedelta, timezone
 from ..models import Post, User, Connection, db, Article
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..routes.user_routes import user_to_dict, serialize_post
 import random
+from ..extensions import limiter 
+from ..extensions import redis_client, db, limiter
 
 discover_bp = Blueprint('discover', __name__)
 
 def get_smart_trending_tags():
+    cached_tags = redis_client.get("trending_tags")
+    if cached_tags is not None:
+        try:
+            return json.loads(cached_tags) # type: ignore
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     now = datetime.now(timezone.utc)
-    posts = Post.query.filter(Post.moderation_status == 'approved', Post.created_at >= (now - timedelta(days=30))).all()
+    posts = Post.query.filter(
+        Post.moderation_status == 'approved', 
+        Post.created_at >= (now - timedelta(days=30))
+    ).all()
+
     tag_counts = {}
     for post in posts:
         if post.tags:
@@ -18,9 +32,12 @@ def get_smart_trending_tags():
                 clean = tag.lower().strip()
                 if len(clean) > 1:
                     tag_counts[clean] = tag_counts.get(clean, 0) + 1
+    
     sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
-    return [t[0] for t in sorted_tags[:10]]
+    final_tags = [t[0] for t in sorted_tags[:10]]
+    redis_client.set("trending_tags", json.dumps(final_tags), ex=3600)
 
+    return final_tags
 def serialize_article(article):
     img = article.image_url
     if img and not img.startswith('http') and not img.startswith('/static'):
@@ -44,6 +61,7 @@ def serialize_article(article):
     }
 
 @discover_bp.route('/', methods=['GET'])
+@limiter.limit("20 per minute")
 @jwt_required(optional=True)
 def get_discover_dashboard():
     current_id = get_jwt_identity()
@@ -105,6 +123,7 @@ def get_article_detail(article_id):
     return jsonify(serialize_article(article)), 200
 
 @discover_bp.route('/search', methods=['GET'])
+@limiter.limit("10 per minute")
 @jwt_required(optional=True)
 def search_content():
     q = request.args.get('q', '').strip()

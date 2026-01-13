@@ -2,7 +2,7 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from flask import Blueprint, request, jsonify
 from ..models import User
-from ..extensions import db
+from ..extensions import db, limiter
 from flask_bcrypt import Bcrypt
 from datetime import datetime, timezone
 import os
@@ -44,6 +44,7 @@ def refresh():
         return jsonify({"error": "Sesi telah berakhir, silakan login ulang.", "details": str(e)}), 401
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per hour")
 def register():
     try:
         data = request.get_json()
@@ -89,6 +90,7 @@ def register():
         return jsonify({"error": "Terjadi kesalahan di server", "details": str(e)}), 500
 
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")
 def login():
     data = request.get_json()
     
@@ -151,6 +153,7 @@ def login():
 
 
 @auth_bp.route('/verify-pin', methods=['POST'])
+@limiter.limit("5 per minute")
 def verify_pin():
     try:
         data = request.get_json()
@@ -192,6 +195,7 @@ def verify_pin():
         return jsonify({"error": str(e)}), 500
 
 @auth_bp.route('/google-login', methods=['POST'])
+@limiter.limit("10 per minute")
 def google_login():
     try:
         data = request.get_json()
@@ -294,6 +298,7 @@ def google_login():
         return jsonify({"error": "Terjadi kesalahan server", "details": str(e)}), 500
     
 @auth_bp.route('/user-google-login', methods=['POST'])
+@limiter.limit("10 per minute")
 def google_user_login():
     try:    
         data = request.get_json(force=True, silent=True)
@@ -488,6 +493,7 @@ def set_password():
 
 
 @auth_bp.route('/change-password', methods=['POST'])
+@limiter.limit("5 per hour")
 @jwt_required()
 def change_password():
     user_id = get_jwt_identity()
@@ -588,6 +594,7 @@ def remove_pin():
     return jsonify({"message": "PIN keamanan berhasil dinonaktifkan"}), 200
 
 @auth_bp.route('/reset-pin-by-otp', methods=['POST'])
+@limiter.limit("3 per hour")
 def reset_pin_by_otp():
     data = request.get_json()
     email = data.get('email')

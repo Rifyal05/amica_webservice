@@ -9,7 +9,7 @@ import os
 from ..services.notif_manager import create_notification
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone 
-
+from ..extensions import limiter
 post_bp = Blueprint('post', __name__)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif'}
@@ -19,6 +19,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @post_bp.route('/', methods=['POST'])
+@limiter.limit("10 per minute")
 @jwt_required()
 def create_post(): 
     user_id = get_jwt_identity()
@@ -106,6 +107,7 @@ def create_post():
 
 
 @post_bp.route('/', methods=['GET'])
+@limiter.limit("60 per minute")
 @jwt_required(optional=True) 
 def get_posts():
     page = request.args.get('page', 1, type=int)
@@ -226,6 +228,7 @@ def get_posts():
     }), 200
 
 @post_bp.route('/<uuid:post_id>/like', methods=['POST'])
+@limiter.limit("30 per minute")
 @jwt_required()
 def toggle_like(post_id): 
     user_id = get_jwt_identity()
@@ -273,6 +276,7 @@ def toggle_like(post_id):
     
 
 @post_bp.route('/<uuid:post_id>', methods=['DELETE'])
+@limiter.limit("5 per minute") 
 @jwt_required()
 def delete_post(post_id):
     user_id = get_jwt_identity()

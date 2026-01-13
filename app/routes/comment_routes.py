@@ -4,12 +4,14 @@ from ..extensions import db
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..services.post_classification_service import post_classifier
 from ..services.notif_manager import create_notification
+from ..extensions import db, limiter 
 
 comment_bp = Blueprint('comment', __name__)
 
 ALLOWED_COMMENT_CATEGORIES = {'Bersih'}
 
 @comment_bp.route('/<uuid:post_id>/comments', methods=['POST'])
+@limiter.limit("20 per minute")
 @jwt_required() 
 def create_comment(post_id): 
     user_id = get_jwt_identity()
@@ -81,6 +83,7 @@ def create_comment(post_id):
     }), 201
 
 @comment_bp.route('/<uuid:post_id>/comments', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_comments(post_id):
     root_comments = Comment.query.filter_by(
         post_id=post_id, 
@@ -125,6 +128,7 @@ def serialize_comment(comment):
 
 
 @comment_bp.route('/<uuid:comment_id>', methods=['DELETE'])
+@limiter.limit("20 per minute")
 @jwt_required()
 def delete_comment(comment_id):
     user_id = get_jwt_identity()

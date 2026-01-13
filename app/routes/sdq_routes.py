@@ -4,10 +4,11 @@ from ..extensions import db
 from ..utils.decorators import token_required
 from ..services.sdq_scoring_service import sdq_scorer
 from ..services.interpretation_service import interpreter
-
+from ..extensions import limiter
 sdq_bp = Blueprint('sdq', __name__)
 
 @sdq_bp.route('/submit', methods=['POST'])
+@limiter.limit("10 per hour")
 @token_required
 def submit_sdq(current_user):
     data = request.get_json()
@@ -45,6 +46,7 @@ def submit_sdq(current_user):
         return jsonify({"error": "Failed to process SDQ result", "details": str(e)}), 500
 
 @sdq_bp.route('/history', methods=['GET'])
+@limiter.limit("20 per minute")
 @token_required
 def get_sdq_history(current_user):
     history = SdqResult.query.filter_by(user_id=current_user.id).order_by(SdqResult.created_at.desc()).all()

@@ -3,10 +3,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import User
 from ..services.report_service import create_report
 import uuid
-
+from .. extensions import limiter
 report_bp = Blueprint('report', __name__)
 
 @report_bp.route('', methods=['POST'])
+@limiter.limit("10 per hour")
 @jwt_required()
 def submit_report():
     user_id = get_jwt_identity()

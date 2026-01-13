@@ -1,9 +1,10 @@
 from flask import Blueprint, jsonify, request
 from ..models import Article, User 
-
+from ..extensions import limiter 
 api_bp = Blueprint('public_api', __name__, url_prefix='/api')
 
 @api_bp.route('/articles', methods=['GET'])
+@limiter.limit("30 per minute")
 def get_public_articles():
     try:
         page = request.args.get('page', 1, type=int)
