@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, Response, stream_with_context
+from flask import Blueprint, request, jsonify, Response, stream_with_context, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, BotChat, BotMessage
 from sqlalchemy import desc
@@ -51,24 +51,28 @@ def user_chat_with_bot():
     chat = get_my_bot_chat(user_id)
     chat.updated_at = datetime.now(timezone.utc)
     
-    user_msg = BotMessage(bot_chat_id=chat.id, role='user', content=user_text) # type: ignore
+    current_chat_id = str(chat.id)
+    
+    user_msg = BotMessage(bot_chat_id=current_chat_id, role='user', content=user_text) # type: ignore
     db.session.add(user_msg)
     db.session.commit()
     
-    history_str = construct_smart_history(chat.id, exclude_msg_id=user_msg.id)
+    history_str = ""
+    
+    app = current_app._get_current_object() # type: ignore
 
     def generate():
-        full_reply = ""
-        for chunk in AIService.chat_with_local_engine(user_text, history_text=history_str):
-            yield chunk
+        with app.app_context():
+            full_reply = ""
+            for chunk in AIService.chat_with_local_engine(user_text, history_text=history_str):
+                yield chunk
+                if not chunk.startswith("[STATUS:") and chunk != "[HEARTBEAT]":
+                    full_reply += chunk
             
-            if not chunk.startswith("[STATUS:") and chunk != "[HEARTBEAT]":
-                full_reply += chunk
-        
-        if full_reply.strip():
-            bot_msg = BotMessage(bot_chat_id=chat.id, role='model', content=full_reply) # type: ignore
-            db.session.add(bot_msg)
-            db.session.commit()
+            if full_reply.strip():
+                bot_msg = BotMessage(bot_chat_id=current_chat_id, role='model', content=full_reply) # type: ignore
+                db.session.add(bot_msg)
+                db.session.commit()
 
     return Response(stream_with_context(generate()), mimetype='text/plain')
 
