@@ -103,7 +103,7 @@ def serialize_comment(comment):
         for reply in approved_replies:
             replies.append(serialize_comment(reply))
             
-    avatar = comment.user.avatar_url
+    avatar = comment.author.avatar_url 
     if avatar and not avatar.startswith('http'):
         if not 'static/uploads' in avatar:
             avatar = f"static/uploads/{avatar}"
@@ -114,12 +114,11 @@ def serialize_comment(comment):
         'created_at': comment.created_at.isoformat(),
         'parent_comment_id': str(comment.parent_comment_id) if comment.parent_comment_id else None,
         'user': {
-            'id': str(comment.user.id),
-            'username': comment.user.username,
-            'display_name': comment.user.display_name,
+            'id': str(comment.author.id),              
+            'username': comment.author.username,       
+            'display_name': comment.author.display_name, 
             'avatar_url': avatar,
-            'is_verified': comment.user.is_verified
-
+            'is_verified': comment.author.is_verified 
         },
         'replies': replies
     }
