@@ -37,7 +37,7 @@ def get_my_bot_chat(user_id):
 def ask_ai_admin(current_user):
     data = request.get_json()
     message = data.get('message', '')
-    return Response(stream_with_context(AIService.chat_with_cloud(message, history_text="")), mimetype='text/plain')
+    return Response(stream_with_context(AIService.chat_with_local_engine(message, history_text="")), mimetype='text/plain')
 
 @bot_bp.route('/send', methods=['POST'])
 @jwt_required()
@@ -59,7 +59,7 @@ def user_chat_with_bot():
 
     def generate():
         full_reply = ""
-        for chunk in AIService.chat_with_cloud(user_text, history_text=history_str):
+        for chunk in AIService.chat_with_local_engine(user_text, history_text=history_str):
             yield chunk
             
             if not chunk.startswith("[STATUS:") and chunk != "[HEARTBEAT]":

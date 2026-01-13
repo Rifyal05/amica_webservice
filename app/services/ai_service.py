@@ -47,7 +47,6 @@ class RedisBalancer:
         self.reset_all_loads()
 
     def reset_all_loads(self):
-        """Menghapus sisa antrian hantu saat server restart"""
         for node in self.nodes_config:
             self.redis_client.set(self._get_node_key(node['url'], 'load'), 0)
             self.redis_client.set(self._get_node_key(node['url'], 'fails'), 0)
@@ -330,3 +329,57 @@ class AIService:
         finally:
             if node:
                 balancer.decrement_load(node['url'], success=request_completed_successfully)
+
+    @classmethod
+    def chat_with_local_engine(cls, message, history_text=""):
+        url = f"{os.getenv('LOCAL_ENGINE_URL', 'http://127.0.0.1:7860')}/v1/chat/stream"
+        headers = {"X-Amica-Key": os.getenv("AI_ENGINE_KEY"), "Content-Type": "application/json"}
+        try:
+            response = requests.post(url, json={"message": message, "history": history_text}, headers=headers, stream=True, timeout=60)
+            if response.status_code == 200:
+                for chunk in response.iter_content(chunk_size=None):
+                    if chunk: yield chunk.decode('utf-8')
+            else:
+                yield f"[STATUS:ERROR] Engine Lokal ({response.status_code})"
+        except Exception as e:
+            yield f"[STATUS:ERROR] Koneksi Terputus: {str(e)}"
+
+    @classmethod
+    def sync_to_local_engine(cls, articles_data):
+        url = f"{os.getenv('LOCAL_ENGINE_URL', 'http://127.0.0.1:7860')}/v1/ingest"
+        headers = {"X-Amica-Key": os.getenv("AI_ENGINE_KEY")}
+        try:
+            res = requests.post(url, json={"articles": articles_data}, headers=headers, timeout=60)
+            return res.json()
+        except:
+            return {"status": "error"}
+
+    @classmethod
+    def sync_all_to_local(cls):
+        if not os.path.exists(cls.JSONL_PATH):
+            return {"status": "error", "message": "File JSONL tidak ditemukan."}
+
+        articles_to_sync = []
+        try:
+            with open(cls.JSONL_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip(): continue
+                    
+                    raw_data = json.loads(line)
+                    meta = raw_data.get("metadata", {})
+                    
+                    articles_to_sync.append({
+                        "id": meta.get("article_id"),
+                        "title": meta.get("title"),
+                        "content": raw_data.get("page_content"),
+                        "chunk_type": meta.get("chunk_type"), 
+                        "source_url": meta.get("source_url")
+                    })
+            
+            if articles_to_sync:
+                return cls.sync_to_local_engine(articles_to_sync)
+            
+            return {"status": "error", "message": "File JSONL kosong."}
+            
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
