@@ -396,6 +396,7 @@ class RAGTestCase(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question = db.Column(db.Text, nullable=False)
     expected_answer = db.Column(db.Text, nullable=False) 
+    target_article_id = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 class RAGBenchmarkResult(db.Model):
@@ -403,11 +404,12 @@ class RAGBenchmarkResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     test_case_id = db.Column(db.Integer, db.ForeignKey('rag_test_cases.id', ondelete='CASCADE'))
     
-    ai_answer = db.Column(db.Text)
-    bleu_score = db.Column(db.Float)
-    llama_score = db.Column(db.Float)
+    ai_answer = db.Column(db.Text)    
+    llama_score = db.Column(db.Float) 
+    llama_reason = db.Column(db.Text)
     
-    llama_reason = db.Column(db.Text) 
+    mrr_score = db.Column(db.Float)
+    retrieved_ids = db.Column(db.JSON)
     
     latency = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

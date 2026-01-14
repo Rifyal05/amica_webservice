@@ -1,94 +1,134 @@
 import time
 import requests
 import os
-from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
-from rouge_score import rouge_scorer
+import json
+import ast
 from ..models import db, RAGTestCase, RAGBenchmarkResult
 from .ai_service import AIService
 
 class ScoringService:
+    
+    @classmethod
+    def generate_test_cases_from_jsonl(cls, limit=20):
+
+        jsonl_path = AIService.JSONL_PATH
+        if not os.path.exists(jsonl_path):
+            return {"status": "error", "message": "Dataset tidak ditemukan."}
+
+        db.session.query(RAGTestCase).delete()
+        db.session.commit()
+        
+        count = 0
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if count >= limit: break
+                if not line.strip(): continue
+                
+                try:
+                    data = json.loads(line)
+                    meta = data.get("metadata", {})
+                    
+                    if meta.get("chunk_type") != "knowledge_core":
+                        continue
+
+                    content = data.get("page_content", "")
+                    lines = content.split('\n')
+                    for l in lines:
+                        if l.strip().startswith("- {'question'"):
+                            try:
+                                clean_line = l.strip()[2:]
+                                faq_dict = ast.literal_eval(clean_line)
+                                
+                                new_case = RAGTestCase(
+                                    question=faq_dict['question'], # type: ignore
+                                    expected_answer=faq_dict['answer'], # type: ignore
+                                    target_article_id=str(meta.get('article_id')) # type: ignore
+                                )
+                                db.session.add(new_case)
+                                count += 1
+                            except:
+                                continue
+                except:
+                    continue
+        
+        db.session.commit()
+        return {"status": "success", "count": count, "message": f"{count} soal ujian berhasil dibuat dari FAQ!"}
+
     @staticmethod
-    def calculate_math_score(reference, hypothesis):
-        ref_tokens = reference.lower().split()
-        hyp_tokens = hypothesis.lower().split()
+    def calculate_mrr(query, target_id):
+        if not target_id: return 0.0, []
+        url = f"{os.getenv('LOCAL_ENGINE_URL')}/v1/search"
+        headers = {"X-Amica-Key": os.getenv("AI_ENGINE_KEY")}
         
-        # BLEU Score
-        cc = SmoothingFunction()
-        bleu = sentence_bleu([ref_tokens], hyp_tokens, smoothing_function=cc.method1)
-        
-        # ROUGE Score
-        scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
-        scores = scorer.score(reference, hypothesis)
-        rouge = scores['rougeL'].fmeasure
-        
-        return (bleu + rouge) / 2 
+        try:
+            res = requests.post(url, json={"query": query}, headers=headers).json()
+            results = res.get('results', [])
+            found_ids = [str(r['article_id']) for r in results]
+            
+            try:
+                rank = found_ids.index(str(target_id)) + 1
+                return 1.0 / rank, found_ids
+            except ValueError:
+                return 0.0, found_ids
+        except:
+            return 0.0, []
 
     @staticmethod
     def get_llama_judge_score(question, expected, actual):
         url = f"{os.getenv('LOCAL_ENGINE_URL')}/v1/audit/grade"
         headers = {"X-Amica-Key": os.getenv("AI_ENGINE_KEY")}
         payload = {
-            "question": question,
-            "context": expected, 
-            "answer": actual
+            "question": f"Pertanyaan: {question}\nKunci Jawaban: {expected}\nJawaban AI: {actual}",
+            "context": expected
         }
         try:
             res = requests.post(url, json=payload, headers=headers, timeout=30)
             if res.status_code == 200:
                 data = res.json()
-                return float(data.get('score', 0)), data.get('reason', 'No reason provided')
-        except:
-            pass
+                return float(data.get('score', 0)), data.get('reason', '')
+        except: pass
         return 0.0, "Audit Failed"
-    
-    
 
     @classmethod
     def run_benchmark(cls):
         test_cases = RAGTestCase.query.all()
         if not test_cases:
-            return {"status": "empty", "message": "Belum ada soal ujian (Test Cases)."}
+            return {"status": "empty", "message": "Belum ada soal. Jalankan 'Generate Test Cases' dulu."}
         
-        summary = {"total": 0, "avg_bleu": 0.0, "avg_llama": 0.0, "avg_latency": 0.0}
-        
-        # Hapus hasil lama biar bersih (Opsional)
+        summary = {"total": 0, "avg_mrr": 0.0, "avg_llama": 0.0, "avg_latency": 0.0}
         db.session.query(RAGBenchmarkResult).delete()
-        db.session.commit()
-
+        
         for case in test_cases:
             start_t = time.time()
             
-            # 1. Generate Jawaban dari Gemma Lokal
+            mrr, retrieved_ids = cls.calculate_mrr(case.question, case.target_article_id)
+
             ai_response = ""
             for chunk in AIService.chat_with_local_engine(case.question, ""):
-                if not chunk.startswith("[STATUS:"):
-                    ai_response += chunk
+                if not chunk.startswith("[STATUS:"): ai_response += chunk
             
             latency = time.time() - start_t
             
-            math_score = cls.calculate_math_score(case.expected_answer, ai_response)
-
             llama_score, llama_reason = cls.get_llama_judge_score(case.question, case.expected_answer, ai_response)
-            
-        
-            # 4. Simpan
+
             res = RAGBenchmarkResult(
                 test_case_id=case.id, # type: ignore
                 ai_answer=ai_response, # type: ignore
-                bleu_score=math_score, # type: ignore
                 llama_score=llama_score, # type: ignore
                 llama_reason=llama_reason, # type: ignore
-                latency=latency  # type: ignore
+                mrr_score=mrr, # type: ignore
+                retrieved_ids=retrieved_ids, # type: ignore
+                latency=latency # type: ignore
             )
             db.session.add(res)
             
             summary["total"] += 1
-            summary["avg_bleu"] += math_score
+            summary["avg_mrr"] += mrr
             summary["avg_llama"] += llama_score
             summary["avg_latency"] += latency
 
         if summary["total"] > 0:
-            summary["avg_bleu"] /= summary["total"]
+            summary["avg_mrr"] /= summary["total"]
             summary["avg_llama"] /= summary["total"]
             summary["avg_latency"] /= summary["total"]
             
