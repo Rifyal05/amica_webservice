@@ -81,7 +81,20 @@ class AIService:
         cls._ensure_directory()
         src_url = article.source_url if article.source_url else ""
         
-        faq_text = "\n".join([f"- {item}" for item in enriched_data.get('faq', [])])
+        faq_list = enriched_data.get('faq', [])
+        faq_text = ""
+        
+        if isinstance(faq_list, list):
+            for item in faq_list:
+                if isinstance(item, dict):
+                    q = item.get('question', '-')
+                    a = item.get('answer', '-')
+                    faq_text += f"Q: {q}\nA: {a}\n\n"
+                else:
+                    faq_text += f"- {item}\n"
+        else:
+            faq_text = str(faq_list)
+
         points_text = "\n".join([f"* {kp}" for kp in enriched_data.get('key_points', [])])
         
         core_content = f"# {article.title}\nKategori: {article.category}\n\n## Ringkasan Komprehensif\n{enriched_data.get('summary', '')}\n\n## Poin Utama\n{points_text}\n\n## FAQ\n{faq_text}"
