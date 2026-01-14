@@ -124,6 +124,7 @@ regex==2025.11.3
 requests==2.32.5
 requests-toolbelt==1.0.0
 rich==14.2.0
+rouge_score==0.1.2
 rsa==4.9.1
 scikit-learn==1.6.1
 scipy==1.16.3

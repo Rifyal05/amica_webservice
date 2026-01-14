@@ -388,3 +388,28 @@ class QuarantinedItem(db.Model):
 
     # Relasi ke Admin (opsional, untuk audit)
     admin = db.relationship('User', foreign_keys=[quarantined_by])
+
+
+
+class RAGTestCase(db.Model):
+    __tablename__ = 'rag_test_cases'
+    id = db.Column(db.Integer, primary_key=True)
+    question = db.Column(db.Text, nullable=False)
+    expected_answer = db.Column(db.Text, nullable=False) 
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+class RAGBenchmarkResult(db.Model):
+    __tablename__ = 'rag_benchmark_results'
+    id = db.Column(db.Integer, primary_key=True)
+    test_case_id = db.Column(db.Integer, db.ForeignKey('rag_test_cases.id', ondelete='CASCADE'))
+    
+    ai_answer = db.Column(db.Text)
+    bleu_score = db.Column(db.Float)
+    llama_score = db.Column(db.Float)
+    
+    llama_reason = db.Column(db.Text) 
+    
+    latency = db.Column(db.Float)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    test_case = db.relationship('RAGTestCase', backref='results')
