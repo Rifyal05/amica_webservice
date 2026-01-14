@@ -28,7 +28,8 @@ from .routes.discover_routes import discover_bp
 from flask import jsonify
 from .extensions import db, bcrypt, mail, socketio, limiter
 mail = Mail()
-scheduler = APScheduler()
+
+scheduler = APScheduler() #obj
 
 def create_app():
     flask_instance = Flask(__name__)

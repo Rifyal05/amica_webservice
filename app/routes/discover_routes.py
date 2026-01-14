@@ -138,3 +138,25 @@ def search_content():
         'posts': [serialize_post(p, current_id) for p in posts if str(p.user_id) != str(current_id)],
         'articles': [serialize_article(a) for a in articles]
     }), 200
+
+@discover_bp.route('/articles/lookup', methods=['POST'])
+def lookup_article_by_url():
+    data = request.get_json()
+    target_url = data.get('url', '').strip()
+    
+    if not target_url:
+        return jsonify({"error": "URL required"}), 400
+
+    article = Article.query.filter(Article.source_url == target_url).first()
+    
+    if not article:
+        clean_target = target_url.replace("https://", "").replace("http://", "").rstrip("/")
+        article = Article.query.filter(Article.source_url.ilike(f"%{clean_target}%")).first()
+
+    if article:
+        return jsonify({
+            "found": True,
+            "article": serialize_article(article)
+        }), 200
+    
+    return jsonify({"found": False}), 200

@@ -10,9 +10,9 @@ import redis
 from flask_jwt_extended import get_jwt_identity
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 
-db = SQLAlchemy()
-bcrypt = Bcrypt()
-jwt = JWTManager()
+db = SQLAlchemy() # obj
+bcrypt = Bcrypt() # obj
+jwt = JWTManager() #obj
 mail = Mail()
 
 def get_enterprise_key():

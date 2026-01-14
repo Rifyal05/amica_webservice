@@ -136,19 +136,19 @@ def login():
         "access_token": access_token,  
         "refresh_token": refresh_token,
         "token": access_token,          
-        "user": {
-            "id": str(user.id),
-            "display_name": user.display_name,
-            "username": user.username,
-            "avatar_url": user.avatar_url,
-            "role": user.role,               
-            "email": user.email,
-            "auth_provider": user.auth_provider,
-            "google_uid": user.google_uid,
-            "has_pin": bool(user.security_pin_hash),
-            "is_verified": user.is_verified,
+            "user": {
+                "id": str(user.id),
+                "display_name": user.display_name,
+                "username": user.username,
+                "avatar_url": user.avatar_url,
+                "role": user.role,               
+                "email": user.email,
+                "auth_provider": user.auth_provider,
+                "google_uid": user.google_uid,
+                "has_pin": bool(user.security_pin_hash),
+                "is_verified": user.is_verified,
 
-        }
+            }
     }), 200
 
 
