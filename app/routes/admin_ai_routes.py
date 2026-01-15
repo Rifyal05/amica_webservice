@@ -78,7 +78,10 @@ def generate_tests(current_user):
 @ai_bp.route('/run-benchmark', methods=['POST'])
 @admin_required
 def run_benchmark_endpoint(current_user):
-    result = ScoringService.run_benchmark()
+    data = request.get_json() or {}
+    limit = data.get('limit')
+    
+    result = ScoringService.run_benchmark(limit=limit)
     return jsonify(result)
 
 @ai_bp.route('/benchmark-results', methods=['GET'])

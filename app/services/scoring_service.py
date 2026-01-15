@@ -97,40 +97,42 @@ class ScoringService:
         return 0.0, "Audit Failed"
 
     @classmethod
-    def run_benchmark(cls):
-        test_cases = RAGTestCase.query.all()
+    def run_benchmark(cls, limit=None):
+        query = RAGTestCase.query
+        if limit:
+            test_cases = query.limit(limit).all()
+        else:
+            test_cases = query.all()
+
         if not test_cases:
-            return {"status": "empty", "message": "Belum ada soal. Jalankan 'Generate Test Cases' dulu."}
-        
-        summary = {"total": 0, "avg_mrr": 0.0, "avg_llama": 0.0, "avg_latency": 0.0}
-        
+            return {"status": "empty", "message": "Belum ada soal ujian."}
+
         db.session.query(RAGBenchmarkResult).delete()
-        db.session.commit() # Commit delete dulu
-        
+        db.session.commit()
+
+        summary = {"total": 0, "avg_mrr": 0.0, "avg_llama": 0.0, "avg_latency": 0.0}
+
         for case in test_cases:
             start_t = time.time()
             
-            # A. Hitung MRR
             mrr, retrieved_ids = cls.calculate_mrr(case.question, case.target_article_id)
 
-            # B. Generate Jawaban
             ai_response = ""
             for chunk in AIService.chat_with_local_engine(case.question, ""):
                 if not chunk.startswith("[STATUS:"): ai_response += chunk
             
             latency = time.time() - start_t
             
-            # C. Judge
             llama_score, llama_reason = cls.get_llama_judge_score(case.question, case.expected_answer, ai_response)
 
             res = RAGBenchmarkResult(
-                test_case_id=case.id,# type: ignore
+                test_case_id=case.id, # type: ignore
                 ai_answer=ai_response,# type: ignore
                 llama_score=llama_score,# type: ignore
                 llama_reason=llama_reason,# type: ignore
-                mrr_score=mrr, # type: ignore
-                retrieved_ids=retrieved_ids, # type: ignore
-                latency=latency # type: ignore
+                mrr_score=mrr,# type: ignore
+                retrieved_ids=retrieved_ids,# type: ignore
+                latency=latency# type: ignore
             )
             db.session.add(res)
             
