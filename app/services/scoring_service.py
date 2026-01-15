@@ -2,7 +2,7 @@ import time
 import requests
 import os
 import json
-import ast
+import re 
 from ..models import db, RAGTestCase, RAGBenchmarkResult
 from .ai_service import AIService
 
@@ -10,7 +10,9 @@ class ScoringService:
     
     @classmethod
     def generate_test_cases_from_jsonl(cls, limit=20):
-
+        """
+        Membaca dataset_rag_final.jsonl dan mengambil FAQ (Format Q: ... A: ...)
+        """
         jsonl_path = AIService.JSONL_PATH
         if not os.path.exists(jsonl_path):
             return {"status": "error", "message": "Dataset tidak ditemukan."}
@@ -32,23 +34,28 @@ class ScoringService:
                         continue
 
                     content = data.get("page_content", "")
-                    lines = content.split('\n')
-                    for l in lines:
-                        if l.strip().startswith("- {'question'"):
-                            try:
-                                clean_line = l.strip()[2:]
-                                faq_dict = ast.literal_eval(clean_line)
-                                
+                    
+                    if "## FAQ" in content:
+                        faq_section = content.split("## FAQ")[1]
+
+                        matches = re.findall(r"Q:\s*(.*?)\n+A:\s*(.*?)(?=\n+Q:|$)", faq_section, re.DOTALL)
+                        
+                        for q, a in matches:
+                            if count >= limit: break
+                            
+                            clean_q = q.strip()
+                            clean_a = a.strip()
+                            
+                            if clean_q and clean_a:
                                 new_case = RAGTestCase(
-                                    question=faq_dict['question'], # type: ignore
-                                    expected_answer=faq_dict['answer'], # type: ignore
-                                    target_article_id=str(meta.get('article_id')) # type: ignore
+                                    question=clean_q,# type: ignore
+                                    expected_answer=clean_a,# type: ignore
+                                    target_article_id=str(meta.get('article_id'))# type: ignore
                                 )
                                 db.session.add(new_case)
                                 count += 1
-                            except:
-                                continue
-                except:
+                except Exception as e:
+                    print(f"Error parsing line: {e}")
                     continue
         
         db.session.commit()
@@ -96,26 +103,31 @@ class ScoringService:
             return {"status": "empty", "message": "Belum ada soal. Jalankan 'Generate Test Cases' dulu."}
         
         summary = {"total": 0, "avg_mrr": 0.0, "avg_llama": 0.0, "avg_latency": 0.0}
+        
         db.session.query(RAGBenchmarkResult).delete()
+        db.session.commit() # Commit delete dulu
         
         for case in test_cases:
             start_t = time.time()
             
+            # A. Hitung MRR
             mrr, retrieved_ids = cls.calculate_mrr(case.question, case.target_article_id)
 
+            # B. Generate Jawaban
             ai_response = ""
             for chunk in AIService.chat_with_local_engine(case.question, ""):
                 if not chunk.startswith("[STATUS:"): ai_response += chunk
             
             latency = time.time() - start_t
             
+            # C. Judge
             llama_score, llama_reason = cls.get_llama_judge_score(case.question, case.expected_answer, ai_response)
 
             res = RAGBenchmarkResult(
-                test_case_id=case.id, # type: ignore
-                ai_answer=ai_response, # type: ignore
-                llama_score=llama_score, # type: ignore
-                llama_reason=llama_reason, # type: ignore
+                test_case_id=case.id,# type: ignore
+                ai_answer=ai_response,# type: ignore
+                llama_score=llama_score,# type: ignore
+                llama_reason=llama_reason,# type: ignore
                 mrr_score=mrr, # type: ignore
                 retrieved_ids=retrieved_ids, # type: ignore
                 latency=latency # type: ignore
