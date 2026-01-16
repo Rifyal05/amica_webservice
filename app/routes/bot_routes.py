@@ -39,6 +39,8 @@ def ask_ai_admin(current_user):
     message = data.get('message', '')
     return Response(stream_with_context(AIService.chat_with_local_engine(message, history_text="")), mimetype='text/plain')
 
+# 
+
 @bot_bp.route('/send', methods=['POST'])
 @jwt_required()
 def user_chat_with_bot():
@@ -75,6 +77,8 @@ def user_chat_with_bot():
                 db.session.commit()
 
     return Response(stream_with_context(generate()), mimetype='text/plain')
+
+# 
 
 @bot_bp.route('/history', methods=['GET'])
 @jwt_required()

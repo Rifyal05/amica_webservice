@@ -1,10 +1,7 @@
 import onnxruntime
-import re
-import os
 import numpy as np
-import pandas as pd
-from ..utils.text_utils import preprocess_text
-from nltk.tokenize import word_tokenize
+import os
+from ..utils.text_utils import post_preprocess_text
 
 class PostClassificationService:
     _instance = None
@@ -22,24 +19,25 @@ class PostClassificationService:
         model_path = "models_ml/text/post/post_classifier.onnx"
         
         if not os.path.exists(model_path):
-            raise FileNotFoundError("Post classification ONNX model not found.")
+            raise FileNotFoundError(f"Post classification ONNX model not found at {model_path}")
 
         self.session = onnxruntime.InferenceSession(model_path)
         self.input_name = self.session.get_inputs()[0].name
         self._initialized = True
         
     def predict(self, text):
-        processed_text = preprocess_text(text, remove_stopwords=True) 
-        
+        if not text or str(text).strip() == "":
+            return "SAFE", 0.0
+
+        processed_text = post_preprocess_text(text)
         input_data = np.array([[processed_text]], dtype=object)
         
-        prediction_result = self.session.run(None, {self.input_name: input_data})
+        outputs = self.session.run(None, {self.input_name: input_data})
         
-        predicted_label = prediction_result[0][0]  # type: ignore
+        predicted_label = outputs[0][0] # type: ignore
+        prob_dict = outputs[1][0] # type: ignore
+        confidence = float(prob_dict.get(predicted_label, 0.0))
         
-        if isinstance(predicted_label, np.ndarray):
-             return predicted_label[0]
-        
-        return predicted_label
-    
+        return str(predicted_label), confidence
+
 post_classifier = PostClassificationService()

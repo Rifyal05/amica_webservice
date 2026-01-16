@@ -36,6 +36,10 @@ def ask_ai_admin(current_user):
     message = data.get('message', '')
     return Response(stream_with_context(AIService.chat_with_local_engine(message)), mimetype='text/plain')
 
+
+#
+#
+
 @ai_bp.route('/test-cases', methods=['GET', 'POST'])
 @admin_required
 def manage_test_cases(current_user):

@@ -13,7 +13,7 @@ from ..extensions import limiter
 post_bp = Blueprint('post', __name__)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif'}
-ALLOWED_TEXT_CATEGORIES = {'Bersih'}
+ALLOWED_TEXT_CATEGORIES = {'SAFE', 'Bersih'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -38,14 +38,16 @@ def create_post():
     if len(caption) > MAX_CAPTION_LENGTH:
         return jsonify({"error": f"Caption tidak boleh lebih dari {MAX_CAPTION_LENGTH} karakter"}), 400
 
-    text_category = post_classifier.predict(caption)
+    text_category, text_confidence = post_classifier.predict(caption)
     text_is_unsafe = text_category not in ALLOWED_TEXT_CATEGORIES
 
     image_url_to_save = None
     image_is_unsafe = False
+    
     moderation_details = {
         'text_status': 'unsafe' if text_is_unsafe else 'safe',
-        'text_category': text_category
+        'text_category': text_category,
+        'text_confidence': f"{text_confidence:.2%}" 
     }
 
     if image_file:
@@ -67,7 +69,7 @@ def create_post():
             
         image_url_to_save = filename
         moderation_details['image_status'] = image_status
-        moderation_details['image_category'] = image_category
+        moderation_details['image_category'] = image_category # type: ignore
 
     new_post = Post()
     new_post.user_id = current_user.id
