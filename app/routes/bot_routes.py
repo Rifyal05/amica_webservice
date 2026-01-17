@@ -66,7 +66,12 @@ def user_chat_with_bot():
     app = current_app._get_current_object() # type: ignore
 
     def generate():
-        yield json.dumps({"session_id": session_id, "type": "meta"}) + "\n"
+        meta = {
+            "type": "meta",
+            "session_id": session_id,
+            "user_message_id": str(user_msg.id)
+        }
+        yield json.dumps(meta) + "\n"
         
         with app.app_context():
             full_reply = ""
@@ -107,7 +112,12 @@ def get_session_history(session_id):
     messages = BotMessage.query.filter_by(bot_chat_id=session_id).order_by(desc(BotMessage.sent_at)).limit(50).all()
     results = []
     for msg in messages:
-        results.append({"id": str(msg.id), "role": msg.role, "text": msg.content, "sent_at": msg.sent_at.isoformat()})
+        results.append({
+            "id": str(msg.id), 
+            "role": msg.role, 
+            "text": msg.content, 
+            "sent_at": msg.sent_at.isoformat()
+        })
     return jsonify(results[::-1])
 
 @bot_bp.route('/sessions/<session_id>', methods=['DELETE'])
@@ -121,3 +131,19 @@ def delete_chat_session(session_id):
     db.session.delete(chat)
     db.session.commit()
     return jsonify({"message": "Sesi dihapus"})
+
+@bot_bp.route('/messages/<message_id>', methods=['DELETE'])
+@jwt_required()
+def delete_message(message_id):
+    user_id = get_jwt_identity()
+    msg = BotMessage.query.join(BotChat).filter(
+        BotMessage.id == message_id,
+        BotChat.user_id == user_id
+    ).first()
+    
+    if not msg:
+        return jsonify({"error": "Pesan tidak ditemukan"}), 404
+    
+    db.session.delete(msg)
+    db.session.commit()
+    return jsonify({"message": "Pesan dihapus"})

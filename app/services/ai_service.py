@@ -168,12 +168,15 @@ class AIService:
         headers = {"X-Amica-Key": os.getenv("AI_ENGINE_KEY"), "Content-Type": "application/json"}
         payload = {"message": message, "history": history_text}
         try:
-            response = requests.post(url, json=payload, headers=headers, stream=True, timeout=60)
-            if response.status_code == 200:
-                for chunk in response.iter_content(chunk_size=None):
-                    if chunk: yield chunk.decode('utf-8')
-            else:
-                yield f"[STATUS:ERROR] Engine Lokal ({response.status_code})"
+            with requests.post(url, json=payload, headers=headers, stream=True, timeout=60) as response:
+                if response.status_code == 200:
+                    for chunk in response.iter_content(chunk_size=None):
+                        if chunk: 
+                            yield chunk.decode('utf-8')
+                else:
+                    yield f"[STATUS:ERROR] Engine Lokal ({response.status_code})"
+        except requests.exceptions.ConnectionError:
+            yield "[STATUS:ERROR] Koneksi ke Engine Lokal Gagal. Pastikan Engine berjalan."
         except Exception as e:
             yield f"[STATUS:ERROR] Koneksi Terputus: {str(e)}"
 
