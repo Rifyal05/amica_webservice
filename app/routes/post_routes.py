@@ -466,21 +466,17 @@ def acknowledge_rejection(post_id):
     if not post:
         return jsonify({"error": "Postingan tidak ditemukan"}), 404
         
-    if post.moderation_status not in ['rejected', 'appealing', 'final_rejected']:
-        return jsonify({"error": "Postingan ini tidak dalam masa moderasi atau sudah selesai."}), 400
-    
     if post.moderation_status not in ['rejected', 'appealing', 'final_rejected', 'quarantined']:
-        return jsonify({"error": "Status postingan tidak mengizinkan aksi ini."}), 400
+        return jsonify({"error": "Postingan ini tidak dalam masa moderasi atau sudah selesai."}), 400
 
     try:
         if post.image_url:
             reject_folder = os.path.join(current_app.root_path, 'static', 'reject')
             path = os.path.join(reject_folder, post.image_url)
-            
             if os.path.exists(path):
                 os.remove(path)
         
-        from app.models import Appeal
+        from ..models import Appeal
         Appeal.query.filter_by(content_id=post.id).delete()
         
         db.session.delete(post)
