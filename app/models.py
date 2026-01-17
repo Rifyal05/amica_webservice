@@ -246,10 +246,10 @@ class BotChat(db.Model):
     __tablename__ = 'bot_chats'
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    title = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
-    # Relasi
     user = db.relationship('User', backref=backref('bot_chats', cascade="all, delete-orphan"))
     messages = db.relationship('BotMessage', backref='bot_chat', cascade="all, delete-orphan", lazy='dynamic')
 
