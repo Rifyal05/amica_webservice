@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from ..models import Article, User 
+from ..models import Article, User, db
 from ..extensions import limiter 
 api_bp = Blueprint('public_api', __name__, url_prefix='/api')
 
@@ -46,5 +46,22 @@ def get_public_articles():
             'pages': pagination.pages,
             'current_page': page
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+
+@api_bp.route('/articles/categories', methods=['GET'])
+def get_article_categories():
+    try:
+        categories = db.session.query(Article.category).distinct().all()
+        
+
+        category_list = [c[0] for c in categories if c[0]]
+        category_list.sort()
+        
+        final_categories = ['Semua'] + category_list
+        
+        return jsonify(final_categories), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
