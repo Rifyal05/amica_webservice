@@ -8,9 +8,10 @@ api_bp = Blueprint('public_api', __name__, url_prefix='/api')
 def get_public_articles():
     try:
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('limit', 50, type=int) 
+        per_page = request.args.get('limit', 10, type=int)
         search = request.args.get('q', '', type=str)
         category = request.args.get('category', '', type=str)
+        is_featured_param = request.args.get('is_featured', '').lower() == 'true'
 
         query = Article.query
 
@@ -19,8 +20,15 @@ def get_public_articles():
         
         if category and category.lower() != 'semua':
             query = query.filter(Article.category.ilike(category))
+            
+        if is_featured_param:
+            query = query.filter(Article.is_featured == True)
 
-        pagination = query.order_by(Article.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+        pagination = query.order_by(Article.created_at.desc()).paginate(
+            page=page, 
+            per_page=per_page, 
+            error_out=False
+        )
 
         data = []
         for a in pagination.items:
@@ -30,7 +38,7 @@ def get_public_articles():
                 'title': a.title,
                 'category': a.category,
                 'author': author.display_name if author else "Lensa Team",
-                'created_at': a.created_at.strftime('%d %B %Y'),
+                'created_at': a.created_at.isoformat() if a.created_at else None,
                 'is_featured': a.is_featured,
                 'image_url': a.image_url,
                 'content': a.content,
@@ -42,10 +50,14 @@ def get_public_articles():
 
         return jsonify({
             'articles': data,
-            'total': pagination.total,
-            'pages': pagination.pages,
-            'current_page': page
-        })
+            'pagination': {
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'current_page': page,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            }
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
