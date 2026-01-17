@@ -30,7 +30,7 @@ def create_comment(post_id):
     if not post:
         return jsonify({"error": "Post not found"}), 404
 
-    text_category = post_classifier.predict(text)
+    text_category, _ = post_classifier.predict(text)
     
     moderation_status = 'approved'
     moderation_details = {'category': text_category}
@@ -41,27 +41,26 @@ def create_comment(post_id):
         rejected_comment = Comment(
             post_id=post_id, # type: ignore
             user_id=current_user.id, # type: ignore
-            parent_comment_id=parent_comment_id,# type: ignore
-            text=text,# type: ignore
-            moderation_status=moderation_status,# type: ignore
-            moderation_details=moderation_details# type: ignore
+            parent_comment_id=parent_comment_id, # type: ignore
+            text=text, # type: ignore
+            moderation_status=moderation_status, # type: ignore
+            moderation_details=moderation_details # type: ignore
         )
         db.session.add(rejected_comment)
         db.session.commit()
         
-        
         return jsonify({
-            "message": "Comment rejected by moderation filter.",
+            "message": "Komentar melanggar pedoman komunitas.",
             "status": moderation_status,
-            "reason": f"Detected category: {text_category}"
+            "reason": text_category
         }), 403
 
     new_comment = Comment(
-        post_id=post_id, # type: ignore
-        user_id=current_user.id,# type: ignore
-        parent_comment_id=parent_comment_id,# type: ignore
-        text=text,# type: ignore
-        moderation_status=moderation_status# type: ignore
+        post_id=post_id,  # type: ignore
+        user_id=current_user.id, # type: ignore
+        parent_comment_id=parent_comment_id, # type: ignore
+        text=text, # type: ignore
+        moderation_status=moderation_status # type: ignore
     )
     
     db.session.add(new_comment)
