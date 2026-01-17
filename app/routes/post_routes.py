@@ -47,7 +47,6 @@ def create_post():
     moderation_details = {
         'text_status': 'unsafe' if text_is_unsafe else 'safe',
         'text_category': text_category,
-        'text_confidence': f"{text_confidence:.2%}" 
     }
 
     if image_file:
@@ -94,7 +93,9 @@ def create_post():
         return jsonify({
             "message": "Postingan ditolak oleh moderasi otomatis, Anda dapat mengajukan banding di menu Pengaturan.",
             "post_id": str(new_post.id),
-            "status": "rejected"
+            "status": "rejected",
+            "is_moderated": True,
+            "moderation_details": moderation_details
         }), 200
     
     new_post.moderation_status = 'approved' 
