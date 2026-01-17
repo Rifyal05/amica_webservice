@@ -29,7 +29,7 @@ def get_enterprise_key():
 limiter = Limiter(
     key_func=get_enterprise_key,
     storage_uri=os.environ.get("REDIS_URL", "redis://localhost:6379"),
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["500 per day", "100 per hour"],
     strategy="fixed-window"
 )
 
