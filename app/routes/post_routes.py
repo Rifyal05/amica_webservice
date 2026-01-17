@@ -468,6 +468,9 @@ def acknowledge_rejection(post_id):
         
     if post.moderation_status not in ['rejected', 'appealing', 'final_rejected']:
         return jsonify({"error": "Postingan ini tidak dalam masa moderasi atau sudah selesai."}), 400
+    
+    if post.moderation_status not in ['rejected', 'appealing', 'final_rejected', 'quarantined']:
+        return jsonify({"error": "Status postingan tidak mengizinkan aksi ini."}), 400
 
     try:
         if post.image_url:
