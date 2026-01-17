@@ -292,15 +292,15 @@ class Notification(db.Model):
         from flask import url_for
         from app.utils.image_utils import generate_thumbnail
 
+        is_moderation = self.type in ['post_rejected', 'appeal_approved', 'appeal_rejected', 'system']
+    
         related_image = None
-        
         if self.type in ['like', 'comment'] and self.reference_id:
             from .models import Post
             try:
                 post = Post.query.filter_by(id=self.reference_id).first()
                 if post and post.image_url:
                     thumb_path = generate_thumbnail(post.image_url, size=(128, 128))
-                    
                     if thumb_path:
                         related_image = url_for('static', filename=thumb_path, _external=True)
                     else:
@@ -312,9 +312,9 @@ class Notification(db.Model):
             'id': str(self.id),
             'recipient_id': str(self.recipient_id),
             'sender_id': str(self.sender_id),
-            'sender_name': self.sender.username if self.sender else "Unknown",
-            'sender_avatar': self.sender.avatar_url if self.sender else None,
-            'sender_is_verified': self.sender.is_verified if self.sender else False,
+            'sender_name': "AMICA" if is_moderation else (self.sender.username if self.sender else "Unknown"),
+            'sender_avatar': "static/assets/logo_amica.png" if is_moderation else (self.sender.avatar_url if self.sender else None),
+            'sender_is_verified': True if is_moderation else (self.sender.is_verified if self.sender else False),
             'type': self.type,
             'reference_id': self.reference_id,
             'text': self.text,

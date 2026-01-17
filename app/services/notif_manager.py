@@ -6,11 +6,11 @@ def create_notification(recipient_id, sender_id, type, reference_id=None, text=N
         return
 
     new_notif = Notification(
-        recipient_id=recipient_id,# type: ignore
-        sender_id=sender_id,# type: ignore
-        type=type,# type: ignore
-        reference_id=reference_id,# type: ignore
-        text=text # type: ignore
+        recipient_id=recipient_id, # type: ignore
+        sender_id=sender_id, # type: ignore
+        type=type, # type: ignore
+        reference_id=reference_id, # type: ignore
+        text=text  # type: ignore
     )
     db.session.add(new_notif)
     db.session.commit()
@@ -19,10 +19,6 @@ def create_notification(recipient_id, sender_id, type, reference_id=None, text=N
     sender = User.query.get(sender_id)
 
     if recipient and recipient.onesignal_player_id:
-        title = "Pemberitahuan Amica"
-        content = "Seseorang berinteraksi dengan Anda."
-        click_type = type
-
         if type in ['like', 'comment'] and reference_id:
             from ..models import Post 
             post = Post.query.get(reference_id)
@@ -37,33 +33,33 @@ def create_notification(recipient_id, sender_id, type, reference_id=None, text=N
             return
 
         elif type == 'follow':
-            title = "Pengikut Baru"
-            content = f"{sender.display_name} mulai mengikuti Anda." # type: ignore
             NotificationService().send_push_notification(
                 player_ids=[recipient.onesignal_player_id],
-                title=title,
-                content=content,
+                title="Pengikut Baru",
+                content=f"{sender.display_name} mulai mengikuti Anda.", # type: ignore
                 data={"type": "follow", "user_id": str(sender.id)}, # type: ignore
                 large_icon=sender.avatar_url # type: ignore
             )
             return
 
-        elif type == 'post_rejected':
-            title = "Postingan Ditahan"
-            content = "Konten Anda melanggar pedoman komunitas Amica. Klik untuk detail."
-            click_type = "post_rejected"
+        is_mod = type in ['post_rejected', 'appeal_approved', 'appeal_rejected']
+        title = "Pemberitahuan Amica"
+        content = "Seseorang berinteraksi dengan Anda."
+
+        if type == 'post_rejected':
+            title = "AMICA Moderasi"
+            content = "Postingan Anda ditahan karena melanggar pedoman komunitas."
         elif type == 'appeal_approved':
-            title = "Banding Diterima"
-            content = "Selamat! Postingan Anda kini telah tayang."
-            click_type = "moderation_update"
+            title = "AMICA Update"
+            content = "Banding diterima! Postingan Anda kini telah tayang."
         elif type == 'appeal_rejected':
-            title = "Banding Ditolak"
-            content = "Postingan Anda telah dihapus permanen oleh Admin."
-            click_type = "moderation_update"
+            title = "AMICA Update"
+            content = "Banding ditolak. Postingan Anda dihapus permanen."
 
         NotificationService().send_push_notification(
             player_ids=[recipient.onesignal_player_id],
             title=title,
             content=content,
-            data={"type": click_type, "reference_id": reference_id}
+            data={"type": type, "reference_id": reference_id},
+            large_icon="static/assets/logo_amica.png" if is_mod else sender.avatar_url # type: ignore
         )
