@@ -313,7 +313,7 @@ class Notification(db.Model):
             'recipient_id': str(self.recipient_id),
             'sender_id': str(self.sender_id),
             'sender_name': "AMICA" if is_moderation else (self.sender.username if self.sender else "Unknown"),
-            'sender_avatar': "static/assets/logo_amica.png" if is_moderation else (self.sender.avatar_url if self.sender else None),
+            'sender_avatar': "static/assets/logo_light.png" if is_moderation else (self.sender.avatar_url if self.sender else None),
             'sender_is_verified': True if is_moderation else (self.sender.is_verified if self.sender else False),
             'type': self.type,
             'reference_id': self.reference_id,
