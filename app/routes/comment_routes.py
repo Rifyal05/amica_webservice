@@ -8,7 +8,7 @@ from ..extensions import db, limiter
 
 comment_bp = Blueprint('comment', __name__)
 
-ALLOWED_COMMENT_CATEGORIES = {'Bersih'}
+ALLOWED_COMMENT_CATEGORIES = {'Bersih', 'SAFE'}
 
 @comment_bp.route('/<uuid:post_id>/comments', methods=['POST'])
 @limiter.limit("20 per minute")
