@@ -61,7 +61,7 @@ def user_chat_with_bot():
     db.session.add(user_msg)
     db.session.commit()
     
-    history_str = ""
+    history_str = construct_smart_history(session_id, exclude_msg_id=user_msg.id)
     
     app = current_app._get_current_object() # type: ignore
 
@@ -109,3 +109,15 @@ def get_session_history(session_id):
     for msg in messages:
         results.append({"id": str(msg.id), "role": msg.role, "text": msg.content, "sent_at": msg.sent_at.isoformat()})
     return jsonify(results[::-1])
+
+@bot_bp.route('/sessions/<session_id>', methods=['DELETE'])
+@jwt_required()
+def delete_chat_session(session_id):
+    user_id = get_jwt_identity()
+    chat = BotChat.query.filter_by(id=session_id, user_id=user_id).first()
+    if not chat:
+        return jsonify({"error": "Sesi tidak ditemukan"}), 404
+    
+    db.session.delete(chat)
+    db.session.commit()
+    return jsonify({"message": "Sesi dihapus"})
