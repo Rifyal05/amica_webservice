@@ -147,6 +147,15 @@ def handle_send_message(data):
                             'reply_to': None
                         }
                         socketio.emit('new_message', ghost_data, to=str(sender.id))
+                        
+                        socketio.emit('inbox_update', {
+                            'chat_id': str(chat_id),
+                            'last_message': text,
+                            'last_sender_name': sender.display_name,
+                            'time': datetime.now(timezone.utc).isoformat(),
+                            'unread_count': 0
+                        }, to=str(sender.id))
+                        
                         return
 
         new_message = Message(

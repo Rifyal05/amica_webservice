@@ -48,12 +48,13 @@ def get_inbox():
         if not my_p_info: continue
 
         other_participant = None
+        is_blocked_by_me = False
+
         if not chat.is_group:
             other_p = ChatParticipant.query.filter(ChatParticipant.chat_id == chat.id, ChatParticipant.user_id != user_id).first()
             if other_p:
                 target_uid_str = str(other_p.user_id)
-                if target_uid_str in blocked_ids or target_uid_str in i_am_blocked_by:
-                    continue
+                is_blocked_by_me = target_uid_str in blocked_ids
                 other_participant = User.query.get(other_p.user_id)
 
         last_msg_obj = Message.query.filter_by(chat_id=chat.id).order_by(desc(Message.sent_at)).first()
@@ -89,6 +90,7 @@ def get_inbox():
             "last_message_time": chat.last_message_time.isoformat() if chat.last_message_time else None,
             "unread_count": my_p_info.unread_count if my_p_info else 0,
             "is_hidden": my_p_info.is_hidden,
+            "is_blocked_by_me": is_blocked_by_me,
             "target_user": {
                 "is_verified": target_user_verified
             }
