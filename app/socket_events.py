@@ -101,7 +101,7 @@ def handle_send_message(data):
         is_ghosted = False
         is_toxic = False
         counter = None
-        receiver = None # DIDEFINISIKAN AWAL
+        receiver = None 
 
         if not chat.is_group:
             recipient_part = ChatParticipant.query.filter(
@@ -266,7 +266,8 @@ def handle_send_message(data):
                     content=notif_content,
                     chat_id=chat.id,        
                     is_group=chat.is_group, 
-                    sender_avatar_path=sender.avatar_url
+                    sender_avatar_path=sender.avatar_url,
+                    message_id=new_message.id
                 )
         
         db.session.commit()
@@ -282,9 +283,16 @@ def handle_message_received(data):
         
         msg = Message.query.get(msg_id)
         if msg:
-            msg.is_delivered = True
-            db.session.commit()
-            
+            if not msg.is_delivered:
+                msg.is_delivered = True 
+                try:
+                    db.session.add(msg)
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                finally:
+                    db.session.remove()
+
             socketio.emit('message_delivered', {
                 'message_id': str(msg_id),
                 'chat_id': str(chat_id)

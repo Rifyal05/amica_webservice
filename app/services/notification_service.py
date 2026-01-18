@@ -63,7 +63,7 @@ class NotificationService:
             large_icon=image_url
         )
 
-    def send_chat_notification(self, recipient_ids, title, content, chat_id, is_group, sender_avatar_path=None):
+    def send_chat_notification(self, recipient_ids, title, content, chat_id, is_group, sender_avatar_path=None, message_id=None):
         icon_url = None
         if sender_avatar_path:
             thumb_path = generate_thumbnail(sender_avatar_path, size=(128, 128))
@@ -75,7 +75,8 @@ class NotificationService:
         click_data = {
             "type": "chat",
             "chat_id": str(chat_id),
-            "is_group": is_group
+            "is_group": is_group,
+            "message_id": str(message_id) if message_id else None
         }
 
         self.send_push_notification(

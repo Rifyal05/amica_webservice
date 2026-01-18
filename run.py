@@ -20,6 +20,6 @@ if __name__ == '__main__':
         # log_output=True
     )
 
-# NOTES(pengingat) = gunicorn -k gevent -w 1 run:amica_app_obj
+# NOTES(pengingat) = gunicorn -k gevent -w 2 run:amica_app_obj
 # Nanti di server asli, pastikan perintah itu dimasukkan ke dalam System Service (systemd).
 # Jadi nanti, servernya akan berjalan otomatis di background 24 jam nonstop, meski servernya habis restart.
