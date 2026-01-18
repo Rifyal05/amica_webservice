@@ -40,6 +40,7 @@ def user_to_dict(user):
         'avatar_url': avatar,
         'banner_url': banner,
         'is_verified': user.is_verified,
+        'is_ai_moderation_enabled': getattr(user, 'is_ai_moderation_enabled', False),
         'stats': {
             'posts': posts_count,
             'followers': followers_count
@@ -129,7 +130,9 @@ def update_profile():
                 "bio": current_user.bio,
                 "avatar_url": resp_avatar,
                 "banner_url": resp_banner,
-                'is_verified': current_user.is_verified
+                'is_verified': current_user.is_verified,
+                'is_ai_moderation_enabled': current_user.is_ai_moderation_enabled
+
             }
         }), 200
     except Exception as e:
@@ -244,6 +247,7 @@ def get_user_profile(user_id):
         "avatar_url": resp_avatar,
         "banner_url": resp_banner,
         "is_verified": user.is_verified,
+        "is_ai_moderation_enabled": getattr(user, 'is_ai_moderation_enabled', False) if is_me else False,
         "stats": {
             "posts": posts_count,
             "followers": followers_count,
@@ -256,6 +260,7 @@ def get_user_profile(user_id):
             "is_blocked": False,
             "i_am_blocked": False,
             "is_verified": user.is_verified,
+            "is_ai_moderation_enabled": getattr(user, 'is_ai_moderation_enabled', False) if is_me else False,
         }
     }
     
