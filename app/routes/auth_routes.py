@@ -573,7 +573,7 @@ def set_pin():
     
     return jsonify({"message": "PIN keamanan berhasil diaktifkan/diubah"}), 200
 
-auth_bp.route('/remove-pin', methods=['POST'])
+@auth_bp.route('/remove-pin', methods=['POST'])
 @jwt_required()
 def remove_pin():
     current_user_id = get_jwt_identity()
