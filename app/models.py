@@ -221,6 +221,7 @@ class Message(db.Model):
     type = db.Column(db.String(20), default='text') # 'text', 'image', 'system'
     attachment_url = db.Column(db.String(1024), nullable=True)
     is_read_by_all = db.Column(db.Boolean, default=False)
+    is_delivered = db.Column(db.Boolean, default=False)
     sent_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     is_deleted = db.Column(db.Boolean, default=False)
     reply_to_id = db.Column(UUID(as_uuid=True), db.ForeignKey('messages.id', ondelete='SET NULL'), nullable=True)

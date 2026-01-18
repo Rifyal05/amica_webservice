@@ -264,7 +264,12 @@ def handle_message_received(data):
         msg_id = data.get('message_id')
         chat_id = data.get('chat_id')
         sender_id = data.get('sender_id')
-        if msg_id and sender_id:
+        
+        msg = Message.query.get(msg_id)
+        if msg:
+            msg.is_delivered = True
+            db.session.commit()
+            
             socketio.emit('message_delivered', {
                 'message_id': str(msg_id),
                 'chat_id': str(chat_id)

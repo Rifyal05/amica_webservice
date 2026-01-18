@@ -153,15 +153,22 @@ def get_messages(chat_id):
         query = query.filter(Message.sender_id.notin_(blocked_ids))
         
     messages = query.order_by(desc(Message.sent_at)).limit(50).all()
+
+    changed = False
+    for m in messages:
+        if str(m.sender_id) != str(user_id) and not m.is_delivered:
+            m.is_delivered = True # type: ignore
+            changed = True
+    if changed:
+        db.session.commit()
+
     results = []
     
     for msg in messages:
         sender_name = "Unknown"
         sender_avatar = None
         sender_username = None
-
         sender_verified = False
-
         
         if msg.sender:
             sender_name = msg.sender.display_name
@@ -197,6 +204,7 @@ def get_messages(chat_id):
             "type": msg.type,
             "sent_at": msg.sent_at.isoformat(),
             "is_read": msg.is_read_by_all,
+            "is_delivered": msg.is_delivered,
             "is_deleted": msg.is_deleted,
             "reply_to": reply_data
         })
