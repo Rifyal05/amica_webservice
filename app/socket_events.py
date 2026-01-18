@@ -98,6 +98,7 @@ def handle_send_message(data):
         chat = Chat.query.get(chat_id)
         if not chat: return
 
+        is_ghosted = False
         if not chat.is_group:
             recipient_part = ChatParticipant.query.filter(
                 ChatParticipant.chat_id == chat_id, 
@@ -106,16 +107,20 @@ def handle_send_message(data):
             
             if recipient_part:
                 receiver = User.query.get(recipient_part.user_id)
+                is_blocked = BlockedUser.query.filter_by(blocker_id=recipient_part.user_id, blocked_id=sender.id).first() is not None
+                
+                is_toxic = False
                 if receiver and receiver.is_ai_moderation_enabled and msg_type == 'text':
                     category, _ = post_classifier.predict(text)
                     if category not in {'Bersih', 'SAFE'}:
+                        is_toxic = True
                         today = datetime.now(timezone.utc).date()
                         counter = ToxicMessageCounter.query.filter_by(
                             sender_id=sender.id, receiver_id=receiver.id, date=today
                         ).first()
                         
                         if not counter:
-                            counter = ToxicMessageCounter(sender_id=sender.id, receiver_id=receiver.id, date=today, count=1) # type: ignore
+                            counter = ToxicMessageCounter(sender_id=sender.id, receiver_id=receiver.id, date=today, count=1)# type: ignore
                             db.session.add(counter)
                         else:
                             counter.count += 1
@@ -123,88 +128,58 @@ def handle_send_message(data):
                         db.session.commit()
 
                         if counter.count >= 5:
-                            is_blocked = BlockedUser.query.filter_by(blocker_id=receiver.id, blocked_id=sender.id).first()
-                            if not is_blocked:
-                                db.session.add(BlockedUser(blocker_id=receiver.id, blocked_id=sender.id)) # type: ignore
+                            if not BlockedUser.query.filter_by(blocker_id=receiver.id, blocked_id=sender.id).first():
+                                db.session.add(BlockedUser(blocker_id=receiver.id, blocked_id=sender.id))# type: ignore
                                 db.session.commit()
                                 socketio.emit('moderation_blocked', {
                                     'chat_id': str(chat_id),
                                     'user_name': sender.display_name,
                                     'user_id': str(sender.id)
                                 }, to=str(receiver.id))
+                
+                if is_blocked or is_toxic:
+                    is_ghosted = True
 
-                        ghost_data = {
-                            'id': str(uuid.uuid4()),
-                            'chat_id': str(chat_id),
-                            'text': text,
-                            'sender_id': str(sender.id),
-                            'sender_name': sender.display_name,
-                            'sender_avatar': get_full_url(sender.avatar_url),
-                            'sender_is_verified': sender.is_verified,
-                            'sent_at': datetime.now(timezone.utc).isoformat(),
-                            'type': 'text',
-                            'is_read': False,
-                            'reply_to': None
-                        }
-                        socketio.emit('new_message', ghost_data, to=str(sender.id))
-                        
-                        socketio.emit('inbox_update', {
-                            'chat_id': str(chat_id),
-                            'last_message': text,
-                            'last_sender_name': sender.display_name,
-                            'time': datetime.now(timezone.utc).isoformat(),
-                            'unread_count': 0
-                        }, to=str(sender.id))
-                        
-                        return
+        if is_ghosted:
+            ghost_time = datetime.now(timezone.utc).isoformat()
+            response_data = {
+                'id': str(uuid.uuid4()),
+                'chat_id': str(chat_id),
+                'text': text,
+                'sender_id': str(sender.id),
+                'sender_name': sender.display_name,
+                'sender_avatar': get_full_url(sender.avatar_url),
+                'sender_is_verified': sender.is_verified,
+                'sent_at': ghost_time,
+                'type': msg_type,
+                'is_read': False,
+                'is_delivered': False,
+                'reply_to': None
+            }
+            socketio.emit('new_message', response_data, to=str(sender.id))
+            socketio.emit('inbox_update', {
+                'chat_id': str(chat_id),
+                'last_message': text,
+                'last_sender_name': sender.display_name,
+                'time': ghost_time,
+                'unread_count': 0
+            }, to=str(sender.id))
+            return
 
         new_message = Message(
-            id=uuid.uuid4(), # type: ignore
-            chat_id=chat_id, # type: ignore
-            sender_id=sender.id, # type: ignore
-            text=text, # type: ignore
-            type=msg_type, # type: ignore
-            sent_at=datetime.now(timezone.utc), # type: ignore
+            id=uuid.uuid4(),# type: ignore
+            chat_id=chat_id,# type: ignore
+            sender_id=sender.id,# type: ignore
+            text=text,# type: ignore
+            type=msg_type,# type: ignore
+            sent_at=datetime.now(timezone.utc),# type: ignore
             reply_to_id=reply_to_id  # type: ignore
         )
         db.session.add(new_message)
 
-        if chat:
-            chat.last_message_text = text if msg_type == 'text' else '📷 Mengirim gambar'
-            chat.last_message_time = new_message.sent_at
+        chat.last_message_text = text if msg_type == 'text' else '📷 Mengirim gambar'
+        chat.last_message_time = new_message.sent_at
         
-        participants = ChatParticipant.query.filter_by(chat_id=chat_id).all()
-        
-        blocked_by_ids = []
-        if chat.is_group:
-            blocks = BlockedUser.query.filter_by(blocked_id=sender.id).all()
-            blocked_by_ids = [str(b.blocker_id) for b in blocks]
-
-        for p in participants:
-            pid = str(p.user_id).lower()
-            sid = str(sender.id).lower()
-            p.is_hidden = False
-            if pid != sid:
-                if chat.is_group and pid in blocked_by_ids:
-                    continue
-                if not chat.is_group:
-                    is_blocked = BlockedUser.query.filter_by(blocker_id=p.user_id, blocked_id=sender.id).first()
-                    if is_blocked:
-                        continue
-                p.unread_count += 1
-                receiver = User.query.get(p.user_id)
-                if receiver and receiver.onesignal_player_id:
-                    notif_title = chat.name if chat.is_group else sender.display_name
-                    base_content = text if msg_type == 'text' else '📷 Mengirim gambar'
-                    notif_content = f"{sender.display_name}: {base_content}" if chat.is_group else base_content
-                    NotificationService().send_chat_notification(
-                        recipient_ids=[receiver.onesignal_player_id],
-                        title=notif_title,
-                        content=notif_content,
-                        chat_id=chat.id,        
-                        is_group=chat.is_group, 
-                        sender_avatar_path=sender.avatar_url
-                    )
         db.session.commit()
 
         reply_info = None
@@ -229,39 +204,73 @@ def handle_send_message(data):
             'sent_at': new_message.sent_at.isoformat(),
             'type': msg_type,
             'is_read': False,
+            'is_delivered': False,
             'reply_to': reply_info
         }
         
+        participants = ChatParticipant.query.filter_by(chat_id=chat_id).all()
+        blocked_by_ids = []
         if chat.is_group:
-             for p in participants:
-                pid = str(p.user_id)
-                if pid == str(sender.id) or pid not in blocked_by_ids:
-                     socketio.emit('new_message', response_data, to=pid)
-        else:
-            socketio.emit('new_message', response_data, to=str(sender.id))
-            recipient_part = ChatParticipant.query.filter(ChatParticipant.chat_id == chat_id, ChatParticipant.user_id != sender.id).first()
-            if recipient_part:
-                is_blocked = BlockedUser.query.filter_by(blocker_id=recipient_part.user_id, blocked_id=sender.id).first()
-                if not is_blocked:
-                    socketio.emit('new_message', response_data, to=str(recipient_part.user_id))
+            blocks = BlockedUser.query.filter_by(blocked_id=sender.id).all()
+            blocked_by_ids = [str(b.blocker_id) for b in blocks]
 
         for p in participants:
-            pid = str(p.user_id).lower()
-            if pid != str(sender.id).lower():
-                if chat.is_group and pid in blocked_by_ids:
-                    continue
-                if not chat.is_group:
-                     is_blocked = BlockedUser.query.filter_by(blocker_id=p.user_id, blocked_id=sender.id).first()
-                     if is_blocked: continue
-                emit('inbox_update', {
-                    'chat_id': str(chat_id),
-                    'last_message': chat.last_message_text,
-                    'last_sender_name': sender.display_name,
-                    'time': chat.last_message_time.isoformat(),
-                    'unread_count': p.unread_count
-                }, to=pid)
+            pid = str(p.user_id)
+            p.is_hidden = False
+            
+            if pid == str(sender.id):
+                socketio.emit('new_message', response_data, to=pid)
+                continue
+
+            if chat.is_group and pid in blocked_by_ids:
+                continue
+                
+            if not chat.is_group:
+                is_blocking = BlockedUser.query.filter_by(blocker_id=p.user_id, blocked_id=sender.id).first()
+                if is_blocking: continue
+
+            p.unread_count += 1
+            socketio.emit('new_message', response_data, to=pid)
+            
+            socketio.emit('inbox_update', {
+                'chat_id': str(chat_id),
+                'last_message': chat.last_message_text,
+                'last_sender_name': sender.display_name,
+                'time': chat.last_message_time.isoformat(),
+                'unread_count': p.unread_count
+            }, to=pid)
+
+            receiver = User.query.get(p.user_id)
+            if receiver and receiver.onesignal_player_id:
+                notif_title = chat.name if chat.is_group else sender.display_name
+                base_content = text if msg_type == 'text' else '📷 Mengirim gambar'
+                notif_content = f"{sender.display_name}: {base_content}" if chat.is_group else base_content
+                NotificationService().send_chat_notification(
+                    recipient_ids=[receiver.onesignal_player_id],
+                    title=notif_title,
+                    content=notif_content,
+                    chat_id=chat.id,        
+                    is_group=chat.is_group, 
+                    sender_avatar_path=sender.avatar_url
+                )
+        
+        db.session.commit()
     except Exception:
         db.session.rollback()
+
+@socketio.on('message_received')
+def handle_message_received(data):
+    try:
+        msg_id = data.get('message_id')
+        chat_id = data.get('chat_id')
+        sender_id = data.get('sender_id')
+        if msg_id and sender_id:
+            socketio.emit('message_delivered', {
+                'message_id': str(msg_id),
+                'chat_id': str(chat_id)
+            }, to=str(sender_id))
+    except Exception:
+        pass
         
 @socketio.on('typing')
 def handle_typing(data):
