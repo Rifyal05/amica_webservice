@@ -26,6 +26,8 @@ class User(db.Model):
     reset_otp = db.Column(db.String(6), nullable=True)
     reset_otp_expires = db.Column(db.DateTime(timezone=True), nullable=True)
     is_verified = db.Column(db.Boolean, default=False)
+    is_ai_moderation_enabled = db.Column(db.Boolean, default=False)
+
 
     # Relationships with cascade delete to prevent NotNullViolation
     posts = db.relationship('Post', backref=db.backref('author', lazy=True), cascade="all, delete-orphan", passive_deletes=True)
@@ -415,3 +417,11 @@ class RAGBenchmarkResult(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     test_case = db.relationship('RAGTestCase', backref='results')
+
+class ToxicMessageCounter(db.Model):
+    __tablename__ = 'toxic_message_counters'
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'))
+    receiver_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'))
+    count = db.Column(db.Integer, default=0)
+    date = db.Column(db.Date, default=lambda: datetime.now(timezone.utc).date())

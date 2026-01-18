@@ -638,3 +638,15 @@ def get_mutual_friends():
 
     users = query.limit(50).all()
     return jsonify([user_to_dict(u) for u in users]), 200
+
+
+@user_bp.route('/settings/moderation', methods=['PATCH'])
+@jwt_required()
+def toggle_moderation():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    data = request.get_json()
+    
+    user.is_ai_moderation_enabled = data.get('enabled', False) # type: ignore
+    db.session.commit()
+    return jsonify({"success": True, "enabled": user.is_ai_moderation_enabled}) # type: ignore
