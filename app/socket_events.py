@@ -99,6 +99,10 @@ def handle_send_message(data):
         if not chat: return
 
         is_ghosted = False
+        is_toxic = False
+        counter = None
+        receiver = None # DIDEFINISIKAN AWAL
+
         if not chat.is_group:
             recipient_part = ChatParticipant.query.filter(
                 ChatParticipant.chat_id == chat_id, 
@@ -109,7 +113,6 @@ def handle_send_message(data):
                 receiver = User.query.get(recipient_part.user_id)
                 is_blocked = BlockedUser.query.filter_by(blocker_id=recipient_part.user_id, blocked_id=sender.id).first() is not None
                 
-                is_toxic = False
                 if receiver and receiver.is_ai_moderation_enabled and msg_type == 'text':
                     category, _ = post_classifier.predict(text)
                     if category not in {'Bersih', 'SAFE'}:
@@ -120,28 +123,30 @@ def handle_send_message(data):
                         ).first()
                         
                         if not counter:
-                            counter = ToxicMessageCounter(sender_id=sender.id, receiver_id=receiver.id, date=today, count=1)# type: ignore
+                            counter = ToxicMessageCounter(sender_id=sender.id, receiver_id=receiver.id, date=today, count=1) # type: ignore
                             db.session.add(counter)
                         else:
                             counter.count += 1
                         
                         db.session.commit()
 
-                        if counter.count >= 5:
+                        if counter.count >= 10:
                             if not BlockedUser.query.filter_by(blocker_id=receiver.id, blocked_id=sender.id).first():
-                                db.session.add(BlockedUser(blocker_id=receiver.id, blocked_id=sender.id))# type: ignore
+                                db.session.add(BlockedUser(blocker_id=receiver.id, blocked_id=sender.id)) # type: ignore
                                 db.session.commit()
                                 socketio.emit('moderation_blocked', {
                                     'chat_id': str(chat_id),
                                     'user_name': sender.display_name,
                                     'user_id': str(sender.id)
                                 }, to=str(receiver.id))
+                                is_ghosted = True
                 
-                if is_blocked or is_toxic:
+                if is_blocked or is_ghosted:
                     is_ghosted = True
 
         if is_ghosted:
             ghost_time = datetime.now(timezone.utc).isoformat()
+            
             response_data = {
                 'id': str(uuid.uuid4()),
                 'chat_id': str(chat_id),
@@ -157,6 +162,7 @@ def handle_send_message(data):
                 'reply_to': None
             }
             socketio.emit('new_message', response_data, to=str(sender.id))
+            
             socketio.emit('inbox_update', {
                 'chat_id': str(chat_id),
                 'last_message': text,
@@ -164,6 +170,15 @@ def handle_send_message(data):
                 'time': ghost_time,
                 'unread_count': 0
             }, to=str(sender.id))
+
+            if is_toxic and receiver and receiver.is_ai_moderation_enabled and counter and counter.count < 10:
+                warning_message = f"🚫 Pesan Anda terdeteksi melanggar pedoman. Penerima mengaktifkan Moderasi AI. Anda akan diblokir otomatis jika melanggar {10 - counter.count} kali lagi hari ini."
+                
+                socketio.emit('moderation_warning', {
+                    'chat_id': str(chat_id),
+                    'warning': warning_message
+                }, to=str(sender.id))
+            
             return
 
         new_message = Message(
@@ -240,13 +255,13 @@ def handle_send_message(data):
                 'unread_count': p.unread_count
             }, to=pid)
 
-            receiver = User.query.get(p.user_id)
-            if receiver and receiver.onesignal_player_id:
+            receiver_user = User.query.get(p.user_id)
+            if receiver_user and receiver_user.onesignal_player_id:
                 notif_title = chat.name if chat.is_group else sender.display_name
                 base_content = text if msg_type == 'text' else '📷 Mengirim gambar'
                 notif_content = f"{sender.display_name}: {base_content}" if chat.is_group else base_content
                 NotificationService().send_chat_notification(
-                    recipient_ids=[receiver.onesignal_player_id],
+                    recipient_ids=[receiver_user.onesignal_player_id],
                     title=notif_title,
                     content=notif_content,
                     chat_id=chat.id,        

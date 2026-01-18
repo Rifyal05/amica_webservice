@@ -370,6 +370,12 @@ def handle_unblock_user(target_uuid):
     success = user_action_service.unblock_user(blocker_id, target_id)
     
     if success:
+        from ..models import ToxicMessageCounter
+        ToxicMessageCounter.query.filter_by(
+            sender_id=target_id, receiver_id=blocker_id
+        ).delete()
+        db.session.commit()
+        
         return jsonify({'message': 'User unblocked successfully'}), 200
     return jsonify({'error': 'User was not found in blocked list or failed to unblock'}), 404
 
