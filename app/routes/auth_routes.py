@@ -348,6 +348,19 @@ def google_user_login():
                 user.google_uid = google_uid
                 db.session.commit()
 
+        if user.is_suspended:
+            if user.suspended_until and user.suspended_until <= datetime.now(timezone.utc):
+                user.is_suspended = False
+                user.suspended_until = None
+                db.session.commit()
+            else:
+                if user.suspended_until.year == 9999:
+                    msg = "Akun ini telah dibanned secara PERMANEN."
+                else:
+                    until_str = user.suspended_until.strftime('%d %B %Y')
+                    msg = f"Akun dibekukan hingga {until_str}."
+                return jsonify({'error': msg, 'status': 'suspended'}), 403
+
         if user.security_pin_hash:
             return jsonify({
                 'status': 'pin_required', 
