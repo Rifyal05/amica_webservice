@@ -1,0 +1,189 @@
+<div x-show="currentView === 'ai_lab'" x-transition.opacity x-cloak x-init="initLab()" class="space-y-6 pb-20">
+    <div class="bg-white dark:bg-[#161b22] rounded-3xl border border-gray-200 dark:border-white/5 shadow-sm p-8">
+        <div class="flex flex-col md:flex-row items-end gap-4">
+            <div class="w-full md:w-[450px] relative shrink-0" @click.away="showArticleDropdown = false">
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Sumber Artikel</label>
+                <button @click="showArticleDropdown = !showArticleDropdown" 
+                        class="w-full flex items-center justify-between px-5 py-3.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-2xl text-sm transition hover:border-indigo-500">
+                    <span class="truncate font-bold text-gray-700 dark:text-gray-300 text-left pr-4" x-text="selectedArticleTitle"></span>
+                    <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                <div x-show="showArticleDropdown" class="absolute z-50 mt-3 w-full bg-white dark:bg-[#1c2128] border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                    <input type="text" x-model="labSearchQuery" placeholder="Cari judul artikel..." 
+                           class="w-full px-5 py-4 bg-transparent border-b border-gray-100 dark:border-white/5 text-sm focus:outline-none text-gray-800 dark:text-white">
+                    <div class="max-h-60 overflow-y-auto p-2 custom-scrollbar text-gray-700 dark:text-gray-300">
+                        <button @click="selectArticle('', 'Semua Artikel (Acak)')" class="w-full text-left px-4 py-3 hover:bg-indigo-500 hover:text-white rounded-xl text-sm font-bold transition mb-1">-- Semua Artikel (Acak) --</button>
+                        <template x-for="art in labArticleList.filter(a => a.title.toLowerCase().includes(labSearchQuery.toLowerCase())).slice(0, 15)" :key="art.id">
+                            <button @click="selectArticle(art.id, art.title)" class="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl text-xs truncate transition" x-text="art.title"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full md:w-24 shrink-0">
+                <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Limit</label>
+                <input type="number" x-model="labLimitInput" class="w-full px-5 py-3.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-2xl text-sm text-center font-black focus:ring-2 focus:ring-indigo-500 outline-none text-gray-700 dark:text-gray-300">
+            </div>
+
+            <div class="flex-1 flex flex-col gap-3">
+                <div class="flex items-center gap-3 px-5 py-3.5 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 cursor-pointer select-none" @click="useLlamaJudge = !useLlamaJudge">
+                    <div class="relative inline-flex items-center">
+                        <div class="w-11 h-6 rounded-full transition-colors" :class="useLlamaJudge ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-700'">
+                            <div class="absolute top-[2px] left-[2px] bg-white w-5 h-5 rounded-full transition-transform" :style="useLlamaJudge ? 'transform: translateX(100%)' : 'transform: translateX(0)'"></div>
+                        </div>
+                    </div>
+                    <label class="text-[10px] font-black text-indigo-500 uppercase tracking-widest cursor-pointer">Analisis Llama Score (Lebih Lambat)</label>
+                </div>
+                <div class="flex gap-3">
+                    <button @click="generateCases()" :disabled="isLabLoading" class="flex-1 px-8 py-3.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl text-sm font-black shadow-xl hover:scale-[1.02] transition">
+                        <span x-text="isLabLoading ? '...' : 'GENERATE SOAL'"></span>
+                    </button>
+                    <button @click="openPreview()" :disabled="labTestCases.length === 0" class="px-6 py-3.5 bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 rounded-2xl text-xs font-black hover:bg-indigo-500 transition">
+                        LIST (<span x-text="labTestCases.length"></span>)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[700px]">
+        <div class="lg:col-span-5 bg-white dark:bg-[#161b22] rounded-3xl border border-gray-200 dark:border-white/5 flex flex-col overflow-hidden shadow-sm">
+            <div class="p-6 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02] flex justify-between items-center text-gray-700 dark:text-gray-300">
+                <h3 class="font-black text-xs uppercase tracking-widest">Arena Chat Testing</h3>
+                <button @click="labMessages = []" class="text-[10px] font-black text-red-500 hover:opacity-70 uppercase">Reset</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar dark:bg-[#0d1117]" id="manualChatBox">
+                <template x-for="msg in labMessages">
+                    <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+                        <div class="max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed" :class="msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-[#161b22] border border-gray-100 dark:border-white/10 text-gray-700 dark:text-gray-300'">
+                            <div x-html="renderMarkdown(msg.text)"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="p-5 bg-white dark:bg-[#161b22] border-t border-gray-100 dark:border-white/5">
+                <form @submit.prevent="sendManualChat" class="relative">
+                    <input type="text" x-model="labChatInput" class="w-full bg-gray-50 dark:bg-black/40 border-0 rounded-2xl px-6 py-4 text-sm text-gray-800 dark:text-white" placeholder="Uji mesin RAG di sini...">
+                    <button type="submit" :disabled="isLabChatting" class="absolute right-2.5 top-2.5 p-2 bg-indigo-600 text-white rounded-xl">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="3" d="M5 12h14M12 5l7 7-7 7"></path></svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="lg:col-span-7 bg-white dark:bg-[#161b22] rounded-3xl border border-gray-200 dark:border-white/5 flex flex-col overflow-hidden shadow-sm">
+            <div class="p-6 bg-gray-50 dark:bg-white/[0.03] border-b border-gray-100 dark:border-white/5">
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="text-center p-3 bg-white dark:bg-[#0d1117] rounded-2xl border border-gray-100 dark:border-white/5">
+                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1">Avg MRR</p>
+                        <p class="text-xl font-black text-emerald-500" x-text="labBenchSummary.avg_mrr"></p>
+                    </div>
+                    <div class="text-center p-3 bg-white dark:bg-[#0d1117] rounded-2xl border border-gray-100 dark:border-white/5">
+                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1">Avg Llama</p>
+                        <p class="text-xl font-black text-indigo-500" x-text="labBenchSummary.avg_llama > 0 ? labBenchSummary.avg_llama : '-'"></p>
+                    </div>
+                    <div class="text-center p-3 bg-white dark:bg-[#0d1117] rounded-2xl border border-gray-100 dark:border-white/5">
+                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-tighter mb-1">Avg Latency</p>
+                        <p class="text-xl font-black text-amber-500" x-text="labBenchSummary.avg_latency + 's'"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-white dark:bg-[#161b22]">
+                <h3 class="font-black text-xs uppercase text-gray-500 tracking-widest">Benchmark History</h3>
+                <div class="flex gap-2">
+                    <button @click="clearHistory()" class="text-[10px] font-black text-gray-400 uppercase px-3 py-2 hover:text-red-500 transition">Clear</button>
+                    <button @click="runBenchmark()" :disabled="isLabRunningBench || labTestCases.length === 0" class="bg-emerald-600 text-white px-5 py-2 rounded-xl text-[10px] font-black shadow-lg shadow-emerald-500/20 transition">
+                        <span x-text="isLabRunningBench ? 'PROCESSING...' : 'RUN BENCHMARK'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-gray-100 dark:bg-[#1c2128] text-gray-700 dark:text-gray-300 uppercase font-black tracking-widest sticky top-0 z-20">
+                        <tr>
+                            <th class="px-8 py-5 border-b border-gray-200 dark:border-white/10">Pertanyaan</th>
+                            <th class="px-6 py-5 border-b border-gray-200 dark:border-white/10 text-center">MRR</th>
+                            <th class="px-6 py-5 border-b border-gray-200 dark:border-white/10 text-center">LLAMA</th>
+                            <th class="px-8 py-5 border-b border-gray-200 dark:border-white/10 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                        <template x-for="res in labBenchmarkResults">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                                <td class="px-8 py-5">
+                                    <div class="font-bold text-gray-800 dark:text-gray-200 line-clamp-1" x-text="res.question"></div>
+                                    <div class="text-[10px] text-indigo-500 font-black mt-1" x-text="res.target_title"></div>
+                                </td>
+                                <td class="px-6 py-5 text-center font-black text-sm" :class="res.mrr_score === 1.0 ? 'text-emerald-500' : 'text-amber-500'" x-text="res.mrr_score.toFixed(2)"></td>
+                                <td class="px-6 py-5 text-center font-black text-sm" :class="res.llama_score >= 80 ? 'text-emerald-500' : 'text-gray-400'" x-text="res.llama_score > 0 ? Math.round(res.llama_score) : '-'"></td>
+                                <td class="px-8 py-5 text-right">
+                                    <button @click="openDetail(res)" class="px-4 py-1.5 border border-gray-200 dark:border-white/10 rounded-lg font-black uppercase text-[9px] hover:bg-gray-900 hover:text-white transition">Detail</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SECTION -->
+    <div x-show="showPreviewModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
+        <div class="bg-white dark:bg-[#161b22] w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[80vh]" @click.away="showPreviewModal = false">
+            <div class="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
+                <h3 class="font-black text-lg uppercase tracking-widest text-gray-800 dark:text-white">Daftar Soal Aktif</h3>
+                <button @click="showPreviewModal = false" class="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <table class="w-full text-sm">
+                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                        <template x-for="(c, i) in labTestCases">
+                            <tr>
+                                <td class="py-3 px-4 text-gray-400 font-mono text-xs" x-text="i+1"></td>
+                                <td class="py-3 px-4 font-bold text-gray-700 dark:text-gray-300" x-text="c.question"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="showDetailModal" class="fixed inset-0 z-[999] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl" x-cloak>
+        <div class="bg-white dark:bg-[#0d1117] w-full max-w-5xl h-[85vh] rounded-[40px] shadow-2xl flex flex-col overflow-hidden" @click.away="showDetailModal = false">
+            <div class="p-8 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
+                <h3 class="font-black text-2xl uppercase tracking-tighter text-gray-800 dark:text-white">Analisis Deep-Dive</h3>
+                <button @click="showDetailModal = false" class="p-4 bg-gray-100 dark:bg-white/10 rounded-full">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+                <div class="p-8 bg-indigo-600 rounded-[30px] text-white">
+                    <p class="text-[10px] font-black uppercase opacity-60 mb-2">Soal Ujian</p>
+                    <p class="text-2xl font-bold" x-text="selectedDetail?.question"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-8">
+                    <div class="space-y-4">
+                        <p class="text-xs font-black uppercase text-emerald-500 tracking-widest">Ground Truth (FAQ)</p>
+                        <div class="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-3xl text-sm leading-loose text-gray-700 dark:text-gray-300" x-text="selectedDetail?.expected"></div>
+                    </div>
+                    <div class="space-y-4">
+                        <p class="text-xs font-black uppercase text-indigo-500 tracking-widest">AI Generated Response</p>
+                        <div class="p-6 bg-indigo-500/5 border border-indigo-500/10 rounded-3xl text-sm leading-loose text-gray-700 dark:text-gray-300" x-html="renderMarkdown(selectedDetail?.actual)"></div>
+                    </div>
+                </div>
+                <div class="p-8 bg-gray-50 dark:bg-white/5 rounded-[30px] border border-gray-100 dark:border-white/5">
+                    <p class="text-xs font-black uppercase text-gray-400 mb-4 tracking-widest">Llama Judge Assessment</p>
+                    <div class="flex items-center gap-6 mb-4">
+                        <div class="text-5xl font-black text-emerald-500" x-text="selectedDetail?.llama_score"></div>
+                        <div class="text-sm font-bold text-gray-600 dark:text-gray-400 italic" x-text="selectedDetail?.llama_reason"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

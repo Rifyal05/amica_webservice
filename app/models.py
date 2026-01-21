@@ -412,7 +412,7 @@ class RAGBenchmarkResult(db.Model):
     llama_reason = db.Column(db.Text)
     
     mrr_score = db.Column(db.Float)
-    retrieved_ids = db.Column(db.JSON)
+    retrieved_ids = db.Column(JSONB)
     
     latency = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

@@ -1,0 +1,33 @@
+<div x-show="showPreviewModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" x-cloak>
+    <div class="bg-white dark:bg-[#161b22] w-full max-w-4xl rounded-2xl shadow-2xl border border-white/10 flex flex-col max-h-[85vh]" @click.away="showPreviewModal = false">
+        <div class="p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-white/[0.02]">
+            <h3 class="font-bold text-lg text-gray-800 dark:text-white">Daftar Soal Ujian (Test Cases)</h3>
+            <button @click="showPreviewModal = false" class="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition">
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-0">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-gray-50 dark:bg-white/5 text-gray-500 text-xs uppercase font-bold sticky top-0">
+                    <tr>
+                        <th class="px-6 py-3 w-12">#</th>
+                        <th class="px-6 py-3">Pertanyaan</th>
+                        <th class="px-6 py-3">Target ID</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                    <template x-for="(c, index) in labTestCases">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-white/5">
+                            <td class="px-6 py-3 text-gray-400 font-mono text-xs" x-text="index + 1"></td>
+                            <td class="px-6 py-3 font-medium text-gray-700 dark:text-gray-300" x-text="c.question"></td>
+                            <td class="px-6 py-3 text-gray-500 text-xs font-mono" x-text="c.target_title"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] text-right">
+            <button @click="showPreviewModal = false" class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg text-sm font-bold">Tutup</button>
+        </div>
+    </div>
+</div>

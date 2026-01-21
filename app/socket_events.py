@@ -117,6 +117,7 @@ def handle_send_message(data):
                     category, _ = post_classifier.predict(text)
                     if category not in {'Bersih', 'SAFE'}:
                         is_toxic = True
+                        is_ghosted = True
                         today = datetime.now(timezone.utc).date()
                         counter = ToxicMessageCounter.query.filter_by(
                             sender_id=sender.id, receiver_id=receiver.id, date=today
@@ -139,7 +140,12 @@ def handle_send_message(data):
                                     'user_name': sender.display_name,
                                     'user_id': str(sender.id)
                                 }, to=str(receiver.id))
-                                is_ghosted = True
+
+                                socketio.emit('moderation_blocked', {
+                                'chat_id': str(chat_id),
+                                'user_name': sender.display_name,
+                                'user_id': str(sender.id)
+                                }, to=str(sender.id))
                 
                 if is_blocked or is_ghosted:
                     is_ghosted = True

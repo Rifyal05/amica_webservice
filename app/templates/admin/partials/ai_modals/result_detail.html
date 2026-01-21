@@ -1,0 +1,66 @@
+<div x-show="showDetailModal" class="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl" x-cloak>
+    <div class="bg-white dark:bg-[#0d1117] w-full max-w-6xl h-full max-h-[90vh] rounded-[40px] shadow-2xl border border-white/5 flex flex-col overflow-hidden" @click.away="showDetailModal = false">
+        <div class="p-8 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-white/[0.02]">
+            <div>
+                <h3 class="font-black text-2xl text-gray-800 dark:text-white uppercase tracking-tighter">Analisis Akurasi</h3>
+                <p class="text-sm text-gray-500 font-medium">Deep Dive perbandingan jawaban Model AI.</p>
+            </div>
+            <button @click="showDetailModal = false" class="p-4 bg-gray-100 dark:bg-white/5 rounded-full text-gray-500 hover:text-red-500 transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar" x-show="selectedDetail">
+            <div class="bg-indigo-600 rounded-[32px] p-8 text-white shadow-2xl shadow-indigo-500/20">
+                <span class="text-[10px] font-black uppercase tracking-widest opacity-60 block mb-2">Input Pertanyaan</span>
+                <p class="text-2xl font-bold leading-tight" x-text="selectedDetail?.question"></p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="p-8 bg-gray-50 dark:bg-white/[0.03] rounded-[32px] border border-gray-100 dark:border-white/5">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-6">Retrieval Logic (MRR)</span>
+                    <div class="flex items-center gap-6">
+                        <span class="text-6xl font-black" :class="selectedDetail?.mrr_score === 1 ? 'text-emerald-500' : 'text-amber-500'" x-text="selectedDetail?.mrr_score"></span>
+                        <div>
+                            <p class="text-sm font-bold text-gray-700 dark:text-gray-300" x-text="selectedDetail?.found_rank > 0 ? 'Ditemukan pada Rank #' + selectedDetail?.found_rank : 'Gagal Menemukan'"></p>
+                            <p class="text-xs text-gray-500 font-mono mt-1" x-text="'Target Artikel ID: ' + selectedDetail?.target_title"></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-8 bg-gray-50 dark:bg-white/[0.03] rounded-[32px] border border-gray-100 dark:border-white/5">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-6">Llama Judge Audit</span>
+                    <div class="flex items-start gap-6">
+                        <span class="text-6xl font-black" :class="selectedDetail?.llama_score >= 80 ? 'text-emerald-500' : 'text-red-500'" x-text="selectedDetail?.llama_score"></span>
+                        <div>
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Alasan Penilaian:</p>
+                            <p class="text-sm text-gray-700 dark:text-gray-400 italic leading-relaxed" x-text="selectedDetail?.llama_reason"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div class="space-y-4">
+                    <span class="flex items-center gap-3 text-xs font-black uppercase text-emerald-500 tracking-widest">
+                        <div class="w-3 h-3 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div> 
+                        Ground Truth (Kunci)
+                    </span>
+                    <div class="p-8 rounded-[32px] bg-emerald-500/[0.03] border border-emerald-500/10 text-base text-gray-700 dark:text-gray-300 leading-loose min-h-[300px]">
+                        <p x-text="selectedDetail?.expected"></p>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <span class="flex items-center gap-3 text-xs font-black uppercase text-indigo-500 tracking-widest">
+                        <div class="w-3 h-3 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/50"></div> 
+                        Generated Answer (Gemma)
+                    </span>
+                    <div class="p-8 rounded-[32px] bg-indigo-500/[0.03] border border-indigo-500/10 text-base text-gray-700 dark:text-gray-300 leading-loose min-h-[300px]">
+                        <div x-html="renderMarkdown(selectedDetail?.actual)"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
