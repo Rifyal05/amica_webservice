@@ -463,7 +463,7 @@ def get_feedbacks(current_user):
             start_date_utc = (start_date - timedelta(hours=7)).replace(tzinfo=None)
             query = query.filter(Feedback.created_at >= start_date_utc)
             
-        feedbacks = query.order_by(Feedback.created_at.desc()).limit(200).all()
+        feedbacks = query.order_by(Feedback.created_at.desc()).limit(200000).all()
         
         pos_list = []
         neg_list = []
