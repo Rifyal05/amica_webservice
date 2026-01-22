@@ -72,7 +72,7 @@ class AmicaLoadTester(HttpUser):
     @task(3)
     def chat_with_bot(self):
         self.client.post("/api/bot/send", json={
-            "message": "Halo Ai, bagaimana cara agar tetap tenang saat menghadapi tekanan pekerjaan?"
+            "message": "Halo Amica, Apa itu Bullying?"
         }, headers=self.auth_header)
 
     @task(2)
