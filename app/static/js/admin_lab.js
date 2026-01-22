@@ -123,36 +123,53 @@ function aiLabLogic() {
         async sendManualChat() {
             if(!this.labChatInput.trim()) return;
             const txt = this.labChatInput;
+            
+            // 1. PUSH PESAN USER
             this.labMessages.push({ id: Date.now(), role: 'user', text: txt, isLoading: false });
             this.labChatInput = '';
             this.isLabChatting = true;
             this.scrollToBottom();
+
+            // 2. LANGSUNG PUSH PESAN AI (LOADING) SEBELUM FETCH
+            // Ini membuat bubble loading langsung muncul tanpa menunggu server
+            const aiMsgId = Date.now() + 1;
+            this.labMessages.push({ id: aiMsgId, role: 'ai', text: '', isLoading: true });
+            this.scrollToBottom();
+
+            // Index pesan terakhir (pesan AI yg baru dibuat)
+            const idx = this.labMessages.length - 1;
+
             try {
                 const res = await this.labFetch('/admin/ai/ask-admin', {
                     method: 'POST',
                     body: JSON.stringify({ message: txt })
                 });
+                
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
-                let aiMsg = { id: Date.now() + 1, role: 'ai', text: '', isLoading: true };
-                this.labMessages.push(aiMsg);
-                const idx = this.labMessages.length - 1;
-                this.scrollToBottom();
+                
                 while(true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    if (this.labMessages[idx].isLoading) {
+
+                    const chunk = decoder.decode(value);
+                    
+                    if (chunk.includes('"type":') || chunk.includes('{"type":') || chunk.trim().startsWith('{')) {
+                        continue;
+                    }
+
+                    if (this.labMessages[idx].isLoading && chunk.trim().length > 0) {
                         this.labMessages[idx].isLoading = false;
                     }
-                    this.labMessages[idx].text += decoder.decode(value);
+                    
+                    this.labMessages[idx].text += chunk;
                     this.scrollToBottom();
                 }
             } catch(e) {
-                if (this.labMessages.length > 0 && this.labMessages[this.labMessages.length - 1].role === 'ai') {
-                     this.labMessages[this.labMessages.length - 1].isLoading = false;
-                     this.labMessages[this.labMessages.length - 1].text += "\nError";
-                } else {
-                     this.labMessages.push({ id: Date.now(), role: 'ai', text: 'Error', isLoading: false });
+                // Jika error, update pesan AI yang sudah dibuat tadi
+                if (this.labMessages[idx]) {
+                     this.labMessages[idx].isLoading = false;
+                     this.labMessages[idx].text = "[Error: Gagal terhubung ke server]";
                 }
             }
             this.isLabChatting = false;

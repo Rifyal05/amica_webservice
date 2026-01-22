@@ -65,6 +65,9 @@ def run_benchmark_endpoint(current_user):
     result = ScoringService.run_benchmark(limit=limit, include_llm=include_llm)
     return jsonify(result)
 
+
+import json
+
 @ai_bp.route('/benchmark-results', methods=['GET'])
 @admin_required
 def get_benchmark_results(current_user):
@@ -72,15 +75,57 @@ def get_benchmark_results(current_user):
         .join(RAGTestCase, RAGBenchmarkResult.test_case_id == RAGTestCase.id)\
         .order_by(RAGBenchmarkResult.id.asc()).all()
 
+    article_cache = {}
+    def get_article(article_id):
+        if not article_id:
+            return None
+        key = str(article_id).strip()
+        if key.isdigit():
+             key = int(key)
+        
+        if key not in article_cache:
+            article = Article.query.get(key)
+            article_cache[key] = article
+        return article_cache.get(key)
+
     data = []
     for res, case in results:
-        title_display = f"ID: {case.target_article_id}"
+        retrieved_list = []
+        if res.retrieved_ids:
+            if isinstance(res.retrieved_ids, str):
+                try:
+                    retrieved_list = json.loads(res.retrieved_ids)
+                except json.JSONDecodeError:
+                    retrieved_list = [i.strip() for i in res.retrieved_ids.split(',') if i.strip()]
+            elif isinstance(res.retrieved_ids, list):
+                retrieved_list = res.retrieved_ids
         
-        if case.target_article_id and case.target_article_id.isdigit():
-            article = Article.query.get(int(case.target_article_id))
-            if article:
-                title_display = article.title
+        target_article = get_article(case.target_article_id)
+        target_id_str = str(case.target_article_id).strip() if case.target_article_id else None
+        target_title = target_article.title if target_article else "Unknown Article"
+        
+        found_article = None
+        found_title = None
+        found_id = None
+        if retrieved_list:
+            found_id = str(retrieved_list[0]).strip() 
+            found_article = get_article(found_id)
+            found_title = found_article.title if found_article else f"ID: {found_id}"
 
+        retrieved_list_data = []
+        for rank, current_id_raw in enumerate(retrieved_list):
+            current_id = str(current_id_raw).strip()
+            current_article = get_article(current_id)
+            
+            is_target = current_id == target_id_str
+            
+            retrieved_list_data.append({
+                "rank": rank + 1,
+                "id": current_id,
+                "title": current_article.title if current_article else "Unknown/Missing Article",
+                "is_target": is_target
+            })
+            
         data.append({
             "question": case.question,
             "expected": case.expected_answer,
@@ -88,11 +133,18 @@ def get_benchmark_results(current_user):
             "llama_score": res.llama_score,
             "llama_reason": res.llama_reason,
             "mrr_score": res.mrr_score,
-            "retrieved_ids": res.retrieved_ids,
-            "target_title": title_display,
+            "latency": round(res.latency, 2),
+            
+            "target_article_id": target_id_str,
+            "target_title": target_title,
+            
+            "found_article_id": found_id if found_id else None,
+            "found_title": found_title if found_title else "Tidak ada artikel relevan", 
+            
+            "all_retrieved": retrieved_list_data,
             "found_rank": int(1.0/res.mrr_score) if res.mrr_score > 0 else 0,
-            "latency": round(res.latency, 2)
         })
+        
     return jsonify(data)
 
 @ai_bp.route('/benchmark-results', methods=['DELETE'])
