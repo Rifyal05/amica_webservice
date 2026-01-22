@@ -9,7 +9,6 @@ from flask_mail import Mail
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-
 db = SQLAlchemy()
 bcrypt = Bcrypt()
 jwt = JWTManager()
@@ -23,22 +22,21 @@ def get_enterprise_key():
             return f"user:{user_id}"
     except Exception:
         pass
-    
     return f"ip:{get_remote_address()}"
-
-def bypass_limiter_filter():
-    secret_token = os.environ.get("BYPASS_LIMITER_TOKEN")
-    if not secret_token:
-        return False
-    return request.headers.get("X-Load-Test-Token") == secret_token
 
 limiter = Limiter(
     key_func=get_enterprise_key,
     storage_uri=os.environ.get("REDIS_URL", "redis://localhost:6379"),
     default_limits=["500 per day", "100 per hour"],
-    strategy="fixed-window",
-    default_limits_exempt_when=bypass_limiter_filter
+    strategy="fixed-window"
 )
+
+@limiter.request_filter
+def global_bypass_filter():
+    secret_token = os.environ.get("BYPASS_LIMITER_TOKEN")
+    if secret_token and request.headers.get("X-Load-Test-Token") == secret_token:
+        return True
+    return False
 
 socketio = SocketIO(
     cors_allowed_origins="*",
