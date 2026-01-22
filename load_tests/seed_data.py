@@ -8,7 +8,7 @@ from app import create_app
 from app.extensions import db, bcrypt
 from app.models import User
 
-def seed_test_users(count=50):
+def seed_test_users(count=500):
     app = create_app()
     with app.app_context():
         print(f"Memulai pembuatan {count} user dummy untuk testing...")
@@ -38,4 +38,4 @@ def seed_test_users(count=50):
         print("Selesai! User dummy siap digunakan.")
 
 if __name__ == "__main__":
-    seed_test_users()
+    seed_test_users(500)
