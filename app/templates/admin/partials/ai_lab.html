@@ -56,7 +56,16 @@
                 <template x-for="msg in labMessages">
                     <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
                         <div class="max-w-[90%] p-4 rounded-3xl text-sm leading-relaxed" :class="msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-[#161b22] border border-gray-100 dark:border-white/10 text-gray-700 dark:text-gray-300'">
-                            <div x-html="renderMarkdown(msg.text)"></div>
+                            <template x-if="msg.isLoading">
+                                <div class="flex space-x-1 h-5 items-center px-1">
+                                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+                                </div>
+                            </template>
+                            <template x-if="!msg.isLoading">
+                                <div x-html="renderMarkdown(msg.text)"></div>
+                            </template>
                         </div>
                     </div>
                 </template>
@@ -128,8 +137,7 @@
             </div>
         </div>
     </div>
-
-    <!-- MODAL SECTION -->
+    
     <div x-show="showPreviewModal" class="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" x-cloak>
         <div class="bg-white dark:bg-[#161b22] w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[80vh]" @click.away="showPreviewModal = false">
             <div class="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">

@@ -123,7 +123,7 @@ function aiLabLogic() {
         async sendManualChat() {
             if(!this.labChatInput.trim()) return;
             const txt = this.labChatInput;
-            this.labMessages.push({ role: 'user', text: txt });
+            this.labMessages.push({ role: 'user', text: txt, isLoading: false });
             this.labChatInput = '';
             this.isLabChatting = true;
             this.scrollToBottom();
@@ -134,17 +134,26 @@ function aiLabLogic() {
                 });
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
-                let aiMsg = { role: 'ai', text: '' };
+                let aiMsg = { role: 'ai', text: '', isLoading: true };
                 this.labMessages.push(aiMsg);
                 const idx = this.labMessages.length - 1;
+                this.scrollToBottom();
                 while(true) {
                     const { done, value } = await reader.read();
                     if (done) break;
+                    if (this.labMessages[idx].isLoading) {
+                        this.labMessages[idx].isLoading = false;
+                    }
                     this.labMessages[idx].text += decoder.decode(value);
                     this.scrollToBottom();
                 }
             } catch(e) {
-                this.labMessages.push({ role: 'ai', text: 'Error' });
+                if (this.labMessages.length > 0 && this.labMessages[this.labMessages.length - 1].role === 'ai') {
+                     this.labMessages[this.labMessages.length - 1].isLoading = false;
+                     this.labMessages[this.labMessages.length - 1].text += "\nError";
+                } else {
+                     this.labMessages.push({ role: 'ai', text: 'Error', isLoading: false });
+                }
             }
             this.isLabChatting = false;
         },
