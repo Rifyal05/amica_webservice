@@ -1,18 +1,18 @@
 import os
+import redis
+from flask import request
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, get_jwt_identity, verify_jwt_in_request
 from flask_socketio import SocketIO
 from flask_mail import Mail
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import redis
-from flask_jwt_extended import get_jwt_identity
-from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 
-db = SQLAlchemy() # obj
-bcrypt = Bcrypt() # obj
-jwt = JWTManager() #obj
+
+db = SQLAlchemy()
+bcrypt = Bcrypt()
+jwt = JWTManager()
 mail = Mail()
 
 def get_enterprise_key():
@@ -26,11 +26,18 @@ def get_enterprise_key():
     
     return f"ip:{get_remote_address()}"
 
+def bypass_limiter_filter():
+    secret_token = os.environ.get("BYPASS_LIMITER_TOKEN")
+    if not secret_token:
+        return False
+    return request.headers.get("X-Load-Test-Token") == secret_token
+
 limiter = Limiter(
     key_func=get_enterprise_key,
     storage_uri=os.environ.get("REDIS_URL", "redis://localhost:6379"),
     default_limits=["500 per day", "100 per hour"],
-    strategy="fixed-window"
+    strategy="fixed-window",
+    default_limits_exempt_when=bypass_limiter_filter
 )
 
 socketio = SocketIO(
