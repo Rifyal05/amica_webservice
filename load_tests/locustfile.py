@@ -61,6 +61,12 @@ class AmicaLoadTester(HttpUser):
         
         self.client.post("/api/posts/", data=data, files=files, headers=self.auth_header)
 
+    @task(3)
+    def submit_feedback(self):
+        self.client.post("/api/feedback/", json={
+            "feedback_text": "Aplikasi Amica ini sangat membantu saya dalam mengelola kesehatan mental setiap hari. Terima kasih pengembang!"
+        }, headers=self.auth_header)
+
     @task(10)
     def view_feed(self):
         self.client.get("/api/posts/?page=1&per_page=10", headers=self.auth_header)
@@ -68,12 +74,6 @@ class AmicaLoadTester(HttpUser):
     @task(5)
     def get_articles(self):
         self.client.get("/api/articles", headers={"X-Load-Test-Token": BYPASS_TOKEN})
-
-    @task(3)
-    def chat_with_bot(self):
-        self.client.post("/api/bot/send", json={
-            "message": "Halo Amica, Apa itu Bullying?"
-        }, headers=self.auth_header)
 
     @task(2)
     def check_notifications(self):
