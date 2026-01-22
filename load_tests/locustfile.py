@@ -6,10 +6,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BYPASS_TOKEN = os.environ.get("BYPASS_LIMITER_TOKEN", "AKUCAPEKBANGET")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def load_image(filename):
+    file_path = os.path.join(BASE_DIR, filename)
     try:
-        with open(filename, "rb") as f:
+        with open(file_path, "rb") as f:
             return f.read()
     except FileNotFoundError:
         return b""
@@ -70,7 +72,7 @@ class AmicaLoadTester(HttpUser):
     @task(3)
     def chat_with_bot(self):
         self.client.post("/api/bot/send", json={
-            "message": "Halo Ai, apa pendapatmu tentang perdamaian dunia?"
+            "message": "Halo Ai, bagaimana cara agar tetap tenang saat menghadapi tekanan pekerjaan?"
         }, headers=self.auth_header)
 
     @task(2)
