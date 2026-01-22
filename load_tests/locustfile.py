@@ -7,6 +7,16 @@ load_dotenv()
 
 BYPASS_TOKEN = os.environ.get("BYPASS_LIMITER_TOKEN", "AKUCAPEKBANGET")
 
+def load_image(filename):
+    try:
+        with open(filename, "rb") as f:
+            return f.read()
+    except FileNotFoundError:
+        return b""
+
+SAFE_IMAGE = load_image("jeruk.jpeg")
+UNSAFE_IMAGE = load_image("senjata.jpeg")
+
 class AmicaLoadTester(HttpUser):
     wait_time = between(1, 5) 
     
@@ -32,6 +42,23 @@ class AmicaLoadTester(HttpUser):
             "X-Load-Test-Token": BYPASS_TOKEN
         }
 
+    @task(2)
+    def create_post_with_ai(self):
+        is_safe_test = random.choice([True, False])
+        img_bytes = SAFE_IMAGE if is_safe_test else UNSAFE_IMAGE
+        filename = "jeruk.jpeg" if is_safe_test else "senjata.jpeg"
+
+        if not img_bytes:
+            return
+
+        files = {'image': (filename, img_bytes, 'image/jpeg')}
+        data = {
+            'caption': f"Uji Pipeline {'Safe' if is_safe_test else 'Unsafe'}. #AmicaLoadTest #{random.randint(1000,9999)}",
+            'tags': ['Testing', 'AI']
+        }
+        
+        self.client.post("/api/posts/", data=data, files=files, headers=self.auth_header)
+
     @task(10)
     def view_feed(self):
         self.client.get("/api/posts/?page=1&per_page=10", headers=self.auth_header)
@@ -40,20 +67,10 @@ class AmicaLoadTester(HttpUser):
     def get_articles(self):
         self.client.get("/api/articles", headers={"X-Load-Test-Token": BYPASS_TOKEN})
 
-    @task(2)
-    def create_post_with_ai(self):
-        file_content = b"fake-image-binary-data" 
-        files = {'image': ('test.jpg', file_content, 'image/jpeg')}
-        data = {
-            'caption': f"Load test Amica. Tangguhlah serverku! #AmicaLoadTest #{random.randint(1000,9999)}",
-            'tags': ['Testing', 'AI']
-        }
-        self.client.post("/api/posts/", data=data, files=files, headers=self.auth_header)
-
     @task(3)
     def chat_with_bot(self):
         self.client.post("/api/bot/send", json={
-            "message": "Apa itu bullying berbasis sara?"
+            "message": "Halo Ai, apa pendapatmu tentang perdamaian dunia?"
         }, headers=self.auth_header)
 
     @task(2)
