@@ -51,7 +51,7 @@ class AIService:
 
     @staticmethod
     def process_article_with_ai(article, client):
-        system_prompt = "Kamu adalah Data Curator untuk RAG Gemma 3 1B. Ekstrak informasi mendalam menjadi format Markdown terstruktur."
+        system_prompt = "Kamu adalah Data Curator untuk RAG Edukasi Anti Bullying. Ekstrak informasi mendalam menjadi format Markdown terstruktur. Dan jangan membuat faq terkait individu, orang atau tempat yang spesifik. fokus pada edukasi dan kemungkinan bagaimana pengguna akan bertanya"
         user_prompt = f"""
         DATA:
         Judul: {article.title}
@@ -59,7 +59,7 @@ class AIService:
         
         TUGAS JSON:
         1. "summary": Ringkasan komprehensif 2 paragraf.
-        2. "key_points": 7 poin kunci sari artikel.
+        2. "key_points": 8 poin kunci dari artikel.
         3. "faq": 10 pasang Q&A detail.
         """
         try:
