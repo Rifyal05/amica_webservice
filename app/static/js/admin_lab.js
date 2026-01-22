@@ -123,7 +123,7 @@ function aiLabLogic() {
         async sendManualChat() {
             if(!this.labChatInput.trim()) return;
             const txt = this.labChatInput;
-            this.labMessages.push({ role: 'user', text: txt, isLoading: false });
+            this.labMessages.push({ id: Date.now(), role: 'user', text: txt, isLoading: false });
             this.labChatInput = '';
             this.isLabChatting = true;
             this.scrollToBottom();
@@ -134,7 +134,7 @@ function aiLabLogic() {
                 });
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
-                let aiMsg = { role: 'ai', text: '', isLoading: true };
+                let aiMsg = { id: Date.now() + 1, role: 'ai', text: '', isLoading: true };
                 this.labMessages.push(aiMsg);
                 const idx = this.labMessages.length - 1;
                 this.scrollToBottom();
@@ -152,7 +152,7 @@ function aiLabLogic() {
                      this.labMessages[this.labMessages.length - 1].isLoading = false;
                      this.labMessages[this.labMessages.length - 1].text += "\nError";
                 } else {
-                     this.labMessages.push({ role: 'ai', text: 'Error', isLoading: false });
+                     this.labMessages.push({ id: Date.now(), role: 'ai', text: 'Error', isLoading: false });
                 }
             }
             this.isLabChatting = false;
