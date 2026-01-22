@@ -51,15 +51,15 @@ class AIService:
 
     @staticmethod
     def process_article_with_ai(article, client):
-        system_prompt = "Kamu adalah Data Curator untuk RAG Gemma 3 1B. Ekstrak informasi mendalam menjadi format Markdown terstruktur."
+        system_prompt = "Kamu adalah Data Curator untuk RAG Edukasi Anti Bullying (pastikan kamu membuat faq itu berdasarkan inti sari dari isi articel). Ekstrak informasi mendalam menjadi format Markdown terstruktur. Dan jangan membuat faq terkait orang yang spesifik. fokus pada edukasi dan kemungkinan bagaimana pengguna akan bertanya. hanya gunakan bahasa indonesia."
         user_prompt = f"""
         DATA:
         Judul: {article.title}
         Isi: {article.content[:25000]}
         
         TUGAS JSON:
-        1. "summary": Ringkasan komprehensif 2 paragraf.
-        2. "key_points": 7 poin kunci sari artikel.
+        1. "summary": Ringkasan detail 2 paragraf.
+        2. "key_points": 8 poin kunci dari artikel.
         3. "faq": 10 pasang Q&A detail.
         """
         try:
@@ -67,7 +67,7 @@ class AIService:
                 model="openai/gpt-oss-120b",
                 messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
                 response_format={"type": "json_object"},
-                temperature=0.2,
+                temperature=0.1,
                 max_tokens=4096
             )
             return json.loads(completion.choices[0].message.content)
