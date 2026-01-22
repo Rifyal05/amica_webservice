@@ -51,7 +51,7 @@ class AIService:
 
     @staticmethod
     def process_article_with_ai(article, client):
-        system_prompt = "Kamu adalah Data Curator untuk RAG Edukasi Anti Bullying. Ekstrak informasi mendalam menjadi format Markdown terstruktur. Dan jangan membuat faq terkait individu, orang atau tempat yang spesifik. fokus pada edukasi dan kemungkinan bagaimana pengguna akan bertanya"
+        system_prompt = "Kamu adalah Data Curator untuk RAG Edukasi Anti Bullying. Ekstrak informasi mendalam menjadi format Markdown terstruktur. Dan jangan membuat faq terkait individu, orang atau tempat yang spesifik. fokus pada edukasi dan kemungkinan bagaimana pengguna akan bertanya. hanya gunakan bahasa indonesia."
         user_prompt = f"""
         DATA:
         Judul: {article.title}
