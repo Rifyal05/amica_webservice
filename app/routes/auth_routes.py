@@ -44,7 +44,7 @@ def refresh():
         return jsonify({"error": "Sesi telah berakhir, silakan login ulang.", "details": str(e)}), 401
 
 @auth_bp.route('/register', methods=['POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("20 per hour")
 def register():
     try:
         data = request.get_json()
