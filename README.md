@@ -112,3 +112,17 @@ Dalam lingkungan operasi publik, infrastruktur aplikasi dilarang dijalankan meng
 
 *   Rate Limiting Dinamis: Mekanisme pembatasan ini dikendalikan oleh Redis. Endpoint publik dialokasikan kapasitas per menit, sementara endpoint otorisasi sensitif (seperti Forgot Password OTP atau titik masuk Login) dibekukan dalam batasan sangat ketat berbasis waktu (per jam) untuk mencegah penetrasi brute-force. Pemeriksa kualitas memegang hak memotong batasan ini lewat penyisipan token khusus X-Load-Test-Token selama sesi pengujian tekanan tinggi (Load Testing) menggunakan Locust.
 *   Pembersihan Sampah Data Otomatis: Task scheduler internal (Flask-APScheduler) bertugas secara asinkron di latar belakang. Ia mengunci sistem pembersihan (scheduler.lock) dan menghapus permanen segala entitas tak terpakai, meliputi gambar maupun dokumen teks berstatus rejected (ditolak moderasi) yang melampaui usia 24 jam agar stabilitas ruang penyimpanan server terus terjaga.
+
+
+## Dokumentasi Lanjutan
+
+Untuk memahami sistem ini secara menyeluruh hingga ke tingkat mikroskopis, silakan pelajari pedoman teknis berikut yang telah dipisahkan agar lebih terstruktur:
+
+*   [Spesifikasi Endpoint API & Kontrak WebSockets](API_CONTRACT.md)
+*   [Panduan Operasional & Deployment Produksi Lanjutan](DEVELOPMENT_DEPLOYMENT.md)
+
+---
+
+## Proyek Terkait
+* **[Amica Mobile](https://github.com/Rifyal05/Amica_Mobile)** — Repositori aplikasi *mobile* dan antarmuka pengguna Amica.
+* **[Amica AI Engine](https://github.com/Rifyal05/amica_ai_engine)** — Engine AI Amica
