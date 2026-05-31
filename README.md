@@ -125,4 +125,4 @@ Untuk memahami sistem ini secara menyeluruh hingga ke tingkat mikroskopis, silak
 
 ## Proyek Terkait
 * **[Amica Mobile](https://github.com/Rifyal05/Amica_Mobile)** — Repositori aplikasi *mobile* dan antarmuka pengguna Amica.
-* **[Amica AI Engine](https://github.com/Rifyal05/amica_ai_engine)** — Engine AI Amica
+* **[Amica AI Engine](https://github.com/fajar123j/amica_ai_engine)** — Engine AI Amica
