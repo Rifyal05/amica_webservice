@@ -1,6 +1,6 @@
-# Amica - AI-Powered Mental Health and Anti-Bullying Platform
+# Amica - AI-Based Anti-Bullying Education Platform
 
-Amica adalah platform kesehatan mental dan anti-perundungan (anti-bullying) yang dirancang untuk mendeteksi, mencegah, dan mengintegrasikan dukungan psikologis secara real-time. Platform ini menggabungkan ekosistem backend Python dengan kecerdasan buatan (AI) lokal untuk menciptakan ruang digital yang aman, inklusif, dan terapeutik bagi penggunanya.
+Amica adalah platform edukasi kesehatan mental dan anti-perundungan (anti-bullying) yang dirancang untuk memberikan edukasi terkait bullying. Platform ini menggabungkan ekosistem backend Python dengan kecerdasan buatan (AI) lokal untuk menciptakan ruang digital yang aman, inklusif, dan nyaman bagi penggunanya.
 
 ## Arsitektur dan Modul Utama
 
